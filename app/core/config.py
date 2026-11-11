@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
 
+    # Logging
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG"
+    log_format: Literal["console", "json"] = "console"
+
     # MySQL
     mysql_host: str = "127.0.0.1"
     mysql_port: int = 3306

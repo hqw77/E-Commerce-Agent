@@ -1,7 +1,7 @@
 import pytest
 from redis.asyncio import Redis
 
-from app.db.redis import close_redis, get_redis, redis_client
+from app.db.redis import get_redis, redis_client
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
