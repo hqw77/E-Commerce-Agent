@@ -1,4 +1,6 @@
 
+from collections.abc import AsyncGenerator
+
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -7,8 +9,6 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import settings
-from collections.abc import AsyncGenerator
-
 
 # 1. 构建 MySQL 异步连接 URL
 DATABASE_URL = URL.create(

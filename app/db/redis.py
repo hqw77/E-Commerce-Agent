@@ -1,9 +1,8 @@
+from collections.abc import AsyncGenerator
+
 from redis.asyncio import ConnectionPool, Redis
 
 from app.core.config import settings
-
-from collections.abc import AsyncGenerator
-
 
 # 1. 获取 Redis 密码
 redis_password = (
