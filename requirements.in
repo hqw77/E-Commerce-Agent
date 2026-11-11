@@ -11,6 +11,7 @@ python-dotenv
 sqlalchemy[asyncio]
 asyncmy
 alembic
+cryptography
 
 # Cache
 redis
