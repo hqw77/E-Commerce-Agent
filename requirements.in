@@ -1,0 +1,19 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+
+# Data Validation & Settings
+pydantic
+pydantic-settings
+python-dotenv
+
+# Database
+sqlalchemy[asyncio]
+asyncmy
+alembic
+
+# Cache
+redis
+
+# Logging
+structlog

@@ -1,0 +1,10 @@
+-r requirements.in
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+
+# Code Quality
+ruff
+mypy
