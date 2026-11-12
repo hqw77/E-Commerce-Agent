@@ -11,11 +11,13 @@ class AppException(Exception):
         code: str = "APPLICATION_ERROR",
         status_code: int = 500,
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.message = message
         self.code = code
         self.status_code = status_code
         self.details = details
+        self.headers = headers
 
         super().__init__(message)
 
@@ -44,12 +46,38 @@ class AuthenticationException(AppException):
         self,
         message: str = "Authentication failed",
         details: dict[str, Any] | None = None,
+        code: str = "AUTHENTICATION_FAILED",
+        headers: dict[str, str] | None = None,
     ) -> None:
+        if headers is None:
+            headers = {"WWW-Authenticate": "Bearer"}
+
         super().__init__(
             message=message,
-            code="AUTHENTICATION_FAILED",
+            code=code,
             status_code=401,
             details=details,
+            headers=headers,
+        )
+
+
+class TokenExpiredException(AuthenticationException):
+    """Exception raised when a token has expired."""
+
+    def __init__(self, message: str = "Access token has expired") -> None:
+        super().__init__(
+            message=message,
+            code="TOKEN_EXPIRED",
+        )
+
+
+class InvalidTokenException(AuthenticationException):
+    """Exception raised when a token is invalid."""
+
+    def __init__(self, message: str = "Invalid access token") -> None:
+        super().__init__(
+            message=message,
+            code="INVALID_TOKEN",
         )
 
 

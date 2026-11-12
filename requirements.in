@@ -22,3 +22,4 @@ structlog
 
 # Security
 argon2-cffi
+PyJWT>=2.15.0

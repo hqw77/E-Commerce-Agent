@@ -1,4 +1,13 @@
-from app.core.security import hash_password, needs_rehash, verify_password
+import pytest
+from argon2.exceptions import VerificationError
+
+from app.core import security
+from app.core.security import (
+    hash_password,
+    needs_rehash,
+    verify_dummy_password,
+    verify_password,
+)
 
 
 def test_hash_password() -> None:
@@ -47,3 +56,26 @@ def test_needs_rehash_with_current_hash() -> None:
 
 def test_needs_rehash_with_invalid_hash() -> None:
     assert needs_rehash("invalid-hash") is False
+
+
+def test_verify_dummy_password_returns_false() -> None:
+    assert verify_dummy_password("MyPassword123") is False
+    assert verify_dummy_password("") is False
+
+
+def test_verify_dummy_password_uses_argon2id_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: dict[str, str] = {}
+
+    class FakeHasher:
+        def verify(self, hash_value: str, password: str) -> bool:
+            recorded["hash"] = hash_value
+            recorded["password"] = password
+            raise VerificationError()
+
+    monkeypatch.setattr(security, "_password_hasher", FakeHasher())
+
+    assert verify_dummy_password("MyPassword123") is False
+    assert recorded["hash"].startswith("$argon2id$")
+    assert recorded["password"] == "MyPassword123"

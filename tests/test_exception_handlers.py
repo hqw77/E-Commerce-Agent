@@ -5,8 +5,11 @@ from fastapi.testclient import TestClient
 
 from app.core.exception_handlers import register_exception_handlers
 from app.core.exceptions import (
+    AuthenticationException,
     BusinessException,
+    InvalidTokenException,
     ResourceNotFoundException,
+    TokenExpiredException,
 )
 
 
@@ -41,6 +44,31 @@ def client() -> TestClient:
     @app.get("/server-error")
     async def server_error():
         raise RuntimeError("database password leaked")
+
+    # Authentication exception test routes
+    @app.get("/test/authentication-error")
+    async def authentication_error():
+        raise AuthenticationException()
+
+    @app.get("/test/token-expired")
+    async def token_expired():
+        raise TokenExpiredException()
+
+    @app.get("/test/invalid-token")
+    async def invalid_token():
+        raise InvalidTokenException()
+
+    @app.get("/test/token-expired-custom")
+    async def token_expired_custom():
+        raise TokenExpiredException(
+            message="Refresh token has expired",
+        )
+
+    @app.get("/test/invalid-token-custom")
+    async def invalid_token_custom():
+        raise InvalidTokenException(
+            message="Refresh token reuse detected",
+        )
 
     return TestClient(app, raise_server_exceptions=False)
 
@@ -92,3 +120,51 @@ def test_unexpected_exception_handler(client: TestClient) -> None:
     }
 
     assert "database password leaked" not in response.text
+
+
+def test_authentication_exception_handler(client: TestClient) -> None:
+    response = client.get("/test/authentication-error")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "AUTHENTICATION_FAILED"
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_token_expired_exception_handler(client: TestClient) -> None:
+    response = client.get("/test/token-expired")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "TOKEN_EXPIRED"
+    assert response.json()["message"] == "Access token has expired"
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_invalid_token_exception_handler(client: TestClient) -> None:
+    response = client.get("/test/invalid-token")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "INVALID_TOKEN"
+    assert response.json()["message"] == "Invalid access token"
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_token_expired_exception_custom_message(
+    client: TestClient,
+) -> None:
+    response = client.get("/test/token-expired-custom")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "TOKEN_EXPIRED"
+    assert response.json()["message"] == "Refresh token has expired"
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_invalid_token_exception_custom_message(
+    client: TestClient,
+) -> None:
+    response = client.get("/test/invalid-token-custom")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "INVALID_TOKEN"
+    assert response.json()["message"] == "Refresh token reuse detected"
+    assert response.headers["www-authenticate"] == "Bearer"

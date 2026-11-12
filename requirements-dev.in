@@ -8,3 +8,6 @@ httpx2
 # Code Quality
 ruff
 mypy
+
+# Dependency Management
+pip-tools

@@ -12,6 +12,8 @@ def setup_logging() -> None:
 
     log_level = settings.log_level
 
+    renderer: structlog.types.Processor
+
     if settings.log_format == "json":
         renderer = structlog.processors.JSONRenderer()
     else:
