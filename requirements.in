@@ -6,6 +6,7 @@ uvicorn
 pydantic
 pydantic-settings
 python-dotenv
+email-validator
 
 # Database
 sqlalchemy[asyncio]
