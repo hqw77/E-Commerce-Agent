@@ -38,6 +38,23 @@ class BusinessException(AppException):
         )
 
 
+class ValidationException(AppException):
+    """Exception raised for business-level request validation failures."""
+
+    def __init__(
+        self,
+        message: str = "Validation failed",
+        code: str = "VALIDATION_ERROR",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=422,
+            details=details,
+        )
+
+
 class AuthenticationException(AppException):
     """Exception raised when authentication fails."""
 
