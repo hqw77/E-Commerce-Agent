@@ -105,37 +105,3 @@ class SkuRepository:
         await self.session.flush()
         await self.session.refresh(sku)
         return sku
-
-
-class InventoryRepository:
-    """Database operations for inventory rows."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def create(self, *, sku_id: int) -> Inventory:
-        inventory = Inventory(
-            sku_id=sku_id,
-            total_quantity=0,
-            reserved_quantity=0,
-        )
-        self.session.add(inventory)
-        await self.session.flush()
-        await self.session.refresh(inventory)
-        return inventory
-
-    async def get_by_sku_id(self, sku_id: int) -> Inventory | None:
-        statement = select(Inventory).where(Inventory.sku_id == sku_id)
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
-
-    async def get_by_sku_ids(
-        self,
-        sku_ids: list[int],
-    ) -> dict[int, Inventory]:
-        if not sku_ids:
-            return {}
-
-        statement = select(Inventory).where(Inventory.sku_id.in_(sku_ids))
-        result = await self.session.execute(statement)
-        return {inventory.sku_id: inventory for inventory in result.scalars().all()}

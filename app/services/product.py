@@ -12,8 +12,9 @@ from app.core.exceptions import (
 from app.models.category import Category
 from app.models.product import Product
 from app.repositories.category import CategoryRepository
+from app.repositories.inventory import InventoryRepository
 from app.repositories.product import ProductRepository
-from app.repositories.sku import InventoryRepository, SkuRepository
+from app.repositories.sku import SkuRepository
 from app.schemas.product import (
     ProductCreateRequest,
     ProductDetailResponse,

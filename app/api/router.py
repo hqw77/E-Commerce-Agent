@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.admin.categories import router as admin_categories_router
+from app.api.v1.admin.inventory import router as admin_inventory_router
 from app.api.v1.admin.products import router as admin_products_router
 from app.api.v1.admin.skus import router as admin_skus_router
 from app.api.v1.auth import router as auth_router
@@ -36,4 +37,10 @@ api_router.include_router(
     admin_skus_router,
     prefix="/admin/skus",
     tags=["Admin SKUs"],
+)
+
+api_router.include_router(
+    admin_inventory_router,
+    prefix="/admin/inventory",
+    tags=["Admin Inventory"],
 )

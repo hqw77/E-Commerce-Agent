@@ -13,8 +13,9 @@ from app.core.exceptions import (
 )
 from app.models.product import Product
 from app.models.sku import Sku
+from app.repositories.inventory import InventoryRepository
 from app.repositories.product import ProductRepository
-from app.repositories.sku import InventoryRepository, SkuRepository
+from app.repositories.sku import SkuRepository
 from app.schemas.sku import SkuCreateRequest
 from app.services.transaction import transaction_context
 
