@@ -22,6 +22,10 @@ venv/
 .coverage
 htmlcov/
 
+# Tool caches
+.mypy_cache/
+.ruff_cache/
+
 # Logs
 *.log
 
