@@ -13,4 +13,4 @@ def test_single_alembic_head_and_expected_parent() -> None:
     assert len(heads) == 1
     revision = script.get_revision(heads[0])
     assert revision is not None
-    assert revision.down_revision == "08b7848e6368"
+    assert revision.down_revision == "c851e383d3fe"
