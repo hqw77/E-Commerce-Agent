@@ -40,9 +40,7 @@ class AfterSaleRepository:
         *,
         for_update: bool = False,
     ) -> AfterSale | None:
-        statement = select(AfterSale).where(
-            AfterSale.after_sales_no == after_sales_no
-        )
+        statement = select(AfterSale).where(AfterSale.after_sales_no == after_sales_no)
         if for_update:
             statement = statement.with_for_update()
         result = await self.session.execute(statement)
@@ -102,9 +100,7 @@ class AfterSaleRepository:
         return list(result.scalars().all())
 
     async def count_for_user(self, user_id: int) -> int:
-        statement = select(func.count(AfterSale.id)).where(
-            AfterSale.user_id == user_id
-        )
+        statement = select(func.count(AfterSale.id)).where(AfterSale.user_id == user_id)
         result = await self.session.execute(statement)
         return int(result.scalar_one())
 

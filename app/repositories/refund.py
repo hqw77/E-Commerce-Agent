@@ -52,16 +52,12 @@ class RefundRepository:
         return result.scalar_one_or_none()
 
     async def get_by_after_sale(self, after_sales_id: int) -> Refund | None:
-        statement = select(Refund).where(
-            Refund.after_sales_id == after_sales_id
-        )
+        statement = select(Refund).where(Refund.after_sales_id == after_sales_id)
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
     async def occupied_amount(self, payment_id: int) -> Decimal:
-        statement = select(
-            func.coalesce(func.sum(Refund.amount), 0)
-        ).where(
+        statement = select(func.coalesce(func.sum(Refund.amount), 0)).where(
             Refund.payment_id == payment_id,
             Refund.status.in_(("PENDING", "PROCESSING", "SUCCESS")),
         )

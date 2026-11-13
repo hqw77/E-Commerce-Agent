@@ -502,6 +502,60 @@ async def test_after_sales_invalid_state_and_cross_user_access(flow):
 
 
 @pytest.mark.asyncio
+async def test_payment_callback_and_timeout_close_race(flow):
+    client, state = flow
+    created = await client.post(
+        "/api/v1/orders",
+        json=order_payload(state["sku_code"], f"race-{uuid4().hex}", 1),
+    )
+    order_no = created.json()["order_no"]
+    payment = await client.post(
+        f"/api/v1/orders/{order_no}/payments",
+        json={"channel": "MOCK"},
+    )
+    payment_no = payment.json()["payment_no"]
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            update(Order)
+            .where(Order.order_no == order_no)
+            .values(expires_at=utc_now() - timedelta(minutes=1))
+        )
+        await session.commit()
+
+    state["user"].is_admin = True
+
+    async def pay():
+        return await client.post(f"/api/v1/payments/{payment_no}/mock-success")
+
+    async def close():
+        return await client.post("/api/v1/admin/orders/close-expired")
+
+    paid, closed = await asyncio.gather(pay(), close())
+    assert paid.status_code == 200, paid.text
+    assert closed.status_code == 200, closed.text
+
+    async with AsyncSessionLocal() as session:
+        order = (
+            await session.execute(select(Order).where(Order.order_no == order_no))
+        ).scalar_one()
+        payment_row = (
+            await session.execute(
+                select(Payment).where(Payment.payment_no == payment_no)
+            )
+        ).scalar_one()
+        inventory = (
+            await session.execute(
+                select(Inventory).where(Inventory.sku_id == state["sku"].id)
+            )
+        ).scalar_one()
+        assert order.status == "CLOSED"
+        assert payment_row.status == "SUCCESS"
+        assert payment_row.exception_reason == "LATE_PAYMENT"
+        assert inventory.total_quantity == 10
+        assert inventory.reserved_quantity == 0
+
+
+@pytest.mark.asyncio
 async def test_user_cannot_access_other_order(flow):
     client, state = flow
     order_no = await _create_paid_order(flow, 1)
