@@ -1,8 +1,8 @@
 # TASK-004.1 订单、支付与售后设计方案（第一版收敛稿）
 
-> 文档状态：设计 Review 中，尚未冻结  
+> 文档状态：设计冻结（第一版）
 > 适用范围：TASK-004.2～004.9  
-> 本文件是 TASK-004 第一版落地的设计基线候选稿。
+> 本文件是 TASK-004 第一版最终设计基线。
 
 ## 0. 收敛说明
 
@@ -243,6 +243,11 @@ Alembic head: c851e383d3fe
   - `UNSHIPPED → SHIPPED`：管理员发货；
   - `SHIPPED → DELIVERED`：管理员确认送达；
   - `DELIVERED → COMPLETED`：管理员完成订单。
+- 管理员完成订单时，同一事务内更新：
+  - `orders.status = COMPLETED`；
+  - `orders.fulfillment_status = COMPLETED`；
+  - `orders.completed_at`。
+- `fulfillment_status` 终态为 `COMPLETED`。
 - 未发货退款只允许 `UNSHIPPED` 状态。
 - 退货退款/换货只允许已送达订单。
 
@@ -272,10 +277,21 @@ Alembic head: c851e383d3fe
 
 - 支持 `MOCK` 和 `ALIPAY`。
 - **一个订单只创建一个支付单**，`payments.order_id` 唯一。
-- 支付创建：
-  - 订单不存在支付单：创建 `PENDING`；
-  - 已存在：直接返回已有支付单（幂等）；
-  - 已失败/关闭：第一版不自动重建支付单，订单取消后重新下单。
+- 支付创建前置条件：
+  - 订单存在；
+  - `orders.status = PENDING_PAYMENT`；
+  - `now <= orders.expires_at`；
+  - 已取消、已关闭、已过期订单不允许创建支付单；
+  - 非 `PENDING_PAYMENT` 返回 409 `ORDER_STATUS_CONFLICT`；
+  - 已过期返回 409 `ORDER_EXPIRED`；
+  - 已存在支付单：
+    - 请求渠道与已有支付单渠道一致，返回已有支付单；
+    - 渠道不一致，返回 409 `PAYMENT_CHANNEL_CONFLICT`；
+    - 已有支付单为 `FAILED`/`CLOSED`，返回 409 `PAYMENT_NOT_RETRYABLE`，不允许重建。
+- 支付失败/关闭后的用户操作：
+  - 用户取消原订单；
+  - 取消事务释放库存预占；
+  - 用户重新下单并创建新的支付单。
 - 支付成功依据：
   - 支付宝异步通知 `notify_url`；
   - 服务端主动查询 `alipay.trade.query`；
@@ -301,13 +317,28 @@ Alembic head: c851e383d3fe
 
 ### 3.5 晚到支付
 
-- 订单取消/关闭后仍收到支付成功通知：
-  - 支付单记录 `SUCCESS`；
-  - `exception_reason='LATE_PAYMENT'`；
-  - 订单保持 `CLOSED`/`CANCELLED`；
-  - 不恢复订单、不预占、不扣库存；
+- 订单取消/关闭后仍收到真实支付成功通知：
+  - `payment.status = SUCCESS`；
+  - `payment.exception_reason = LATE_PAYMENT`；
+  - `orders.status` 保持 `CLOSED` / `CANCELLED`；
+  - `orders.payment_status = PAID`；
+  - `orders.paid_amount = payment.amount`；
+  - `orders.paid_at = payment.paid_at`；
+  - 不恢复订单、不重新预占、不扣库存；
   - 返回 `success` 停止支付宝重试；
   - 管理员通过手动退款处理。
+- 订单仍为 `PENDING_PAYMENT`，但回调到达时已超过 `expires_at`：
+  - 在订单锁内按超时关闭处理；
+  - 释放该订单的库存预占；
+  - 订单状态置为 `CLOSED`；
+  - 记录支付成功和 `LATE_PAYMENT`；
+  - 不执行 `RESERVED_OUTBOUND`；
+  - 后续由管理员手动退款。
+- 晚到支付退款成功后：
+  - `orders.payment_status = REFUNDED`；
+  - `orders.refunded_amount` 更新；
+  - 订单业务状态仍保持 `CLOSED` / `CANCELLED`；
+  - 不回补库存。
 - 不实现多笔成功支付对账或自动退款。
 
 ### 3.6 退款
@@ -324,6 +355,12 @@ Alembic head: c851e383d3fe
   - `SUCCESS`：成功；
   - `FAILED`：失败，释放额度。
 - `FAILED` 可手动重试，复用同一退款单号和 `out_request_no`。
+- `PENDING` 异常处理：
+  - 长期停留在 `PENDING` 的退款由管理员人工核查；
+  - 只有确认外部退款请求尚未发起，才允许使用原退款单号发起；
+  - 外部结果未知时先查询，不创建新的退款单；
+  - 不允许重复发起可能导致重复退款的请求；
+  - 不增加自动恢复系统。
 - `PROCESSING` 超时/结果未知：
   - 继续占用额度；
   - 不创建新退款；
@@ -340,7 +377,11 @@ Alembic head: c851e383d3fe
 ### 3.7 售后
 
 - 支持 `REFUND_ONLY`、`RETURN_REFUND`、`EXCHANGE`。
-- 第一版整行售后：`quantity = order_item.quantity`。
+- 第一版只支持整行售后，不支持部分数量或部分金额：
+  - `quantity = order_item.quantity`；
+  - `requested_amount = order_item.line_amount`；
+  - 审核通过时 `approved_amount = requested_amount`；
+  - 审核接口不接收、不允许修改退款金额。
 - 期限：
   - `REFUND_ONLY`：从 `paid_at` 起连续 7×24 小时（默认，可配置）；
   - `RETURN_REFUND`：从 `delivered_at` 起连续 7×24 小时（默认，可配置）；
@@ -360,6 +401,13 @@ Alembic head: c851e383d3fe
   - 换货：入库，等待补发。
 - 换货补发时出库，售后完成。
 - 售后状态与退款状态分别维护。
+- 售后操作前置状态：
+  - `approve` / `reject`：仅 `PENDING_REVIEW`；
+  - 用户 `cancel`：第一版仅 `PENDING_REVIEW`；
+  - `return-shipment`：仅 `WAITING_RETURN`；
+  - `receive`：仅 `RETURN_SHIPPED`；
+  - `complete-exchange`：仅 `RECEIVED`。
+- 所有售后操作必须锁定订单、订单明细、售后行，并在锁内重新校验状态；状态不匹配返回 409 `AFTER_SALES_STATUS_CONFLICT`。
 
 ### 3.8 时间、权限与编号
 
@@ -386,7 +434,7 @@ Alembic head: c851e383d3fe
 | `user_id` | BIGINT FK users | 用户 |
 | `status` | VARCHAR(24) | PENDING_PAYMENT/PAID/CANCELLED/CLOSED/COMPLETED |
 | `payment_status` | VARCHAR(24) | UNPAID/PAID/PARTIALLY_REFUNDED/REFUNDED |
-| `fulfillment_status` | VARCHAR(24) | UNSHIPPED/SHIPPED/DELIVERED |
+| `fulfillment_status` | VARCHAR(24) | UNSHIPPED/SHIPPED/DELIVERED/COMPLETED |
 | `total_amount` | DECIMAL(12,2) | 商品总额 |
 | `paid_amount` | DECIMAL(12,2) | 已支付 |
 | `refunded_amount` | DECIMAL(12,2) | 已退款 |
@@ -396,6 +444,7 @@ Alembic head: c851e383d3fe
 | `receiver_address` | VARCHAR(500) | 地址 |
 | `customer_remark` | VARCHAR(255) | 备注 |
 | `idempotency_key` | VARCHAR(128) ASCII | 下单幂等键 |
+| `request_fingerprint` | CHAR(64) ASCII | 下单请求指纹 SHA-256 |
 | `expires_at` | DATETIME(6) | 支付截止 |
 | `paid_at` | DATETIME(6) | 支付成功时间 |
 | `shipped_at` | DATETIME(6) | 发货时间 |
@@ -420,6 +469,9 @@ INDEX(tracking_no)
 CHECK(total_amount > 0)
 CHECK(paid_amount >= 0 AND paid_amount <= total_amount)
 CHECK(refunded_amount >= 0 AND refunded_amount <= paid_amount)
+CHECK(
+  fulfillment_status IN ('UNSHIPPED', 'SHIPPED', 'DELIVERED', 'COMPLETED')
+)
 CHECK(
   (shipping_carrier IS NULL AND tracking_no IS NULL)
   OR
@@ -545,9 +597,9 @@ CHECK(amount > 0)
 | `user_id` | BIGINT FK users | 用户 |
 | `type` | VARCHAR(24) | REFUND_ONLY/RETURN_REFUND/EXCHANGE |
 | `status` | VARCHAR(32) | 见状态机 |
-| `quantity` | INT | 数量 |
-| `requested_amount` | DECIMAL(12,2) | 申请金额 |
-| `approved_amount` | DECIMAL(12,2) NULL | 审核金额 |
+| `quantity` | INT | 必须等于 order_item.quantity |
+| `requested_amount` | DECIMAL(12,2) | 必须等于 order_item.line_amount |
+| `approved_amount` | DECIMAL(12,2) NULL | 审核金额，必须等于 requested_amount |
 | `reason` | VARCHAR(255) | 原因 |
 | `description` | TEXT | 描述 |
 | `evidence_urls` | JSON NULL | 凭证 URL |
@@ -575,8 +627,16 @@ INDEX(order_item_id, status)
 INDEX(status, created_at)
 CHECK(quantity > 0)
 CHECK(requested_amount > 0)
-CHECK(approved_amount IS NULL OR approved_amount <= requested_amount)
+CHECK(approved_amount IS NULL OR approved_amount = requested_amount)
 ```
+
+说明：
+
+- `quantity` 必须等于对应 `order_item.quantity`；
+- `requested_amount` 必须等于 `order_item.line_amount`；
+- 审核通过时 `approved_amount = requested_amount`；
+- 第一版不支持部分数量、部分金额售后；
+- 审核接口不接受金额参数。
 
 说明：
 
@@ -627,15 +687,15 @@ orders
 | GET | `/api/v1/orders` | 我的订单 |
 | GET | `/api/v1/orders/{order_no}` | 我的订单详情 |
 | POST | `/api/v1/orders/{order_no}/cancel` | 取消待支付订单 |
-| POST | `/api/v1/orders/{order_no}/payments` | 创建或获取支付单 |
+| POST | `/api/v1/orders/{order_no}/payments` | 创建/获取支付单；仅待支付且未过期，渠道需一致 |
 | GET | `/api/v1/payments/{payment_no}` | 查询自己的支付 |
 | POST | `/api/v1/payments/{payment_no}/mock-success` | 模拟成功，仅开发/测试 |
 | POST | `/api/v1/payments/{payment_no}/mock-fail` | 模拟失败，仅开发/测试 |
 | POST | `/api/v1/orders/{order_no}/after-sales` | 申请售后 |
 | GET | `/api/v1/orders/{order_no}/after-sales` | 我的售后 |
 | GET | `/api/v1/after-sales/{after_sales_no}` | 售后详情 |
-| POST | `/api/v1/after-sales/{after_sales_no}/cancel` | 取消售后 |
-| POST | `/api/v1/after-sales/{after_sales_no}/return-shipment` | 填写退货物流 |
+| POST | `/api/v1/after-sales/{after_sales_no}/cancel` | 取消售后；仅 PENDING_REVIEW |
+| POST | `/api/v1/after-sales/{after_sales_no}/return-shipment` | 填写退货物流；仅 WAITING_RETURN |
 
 ### 5.2 支付回调
 
@@ -654,7 +714,7 @@ orders
 | GET | `/api/v1/admin/orders/{order_no}` | 订单详情 |
 | POST | `/api/v1/admin/orders/{order_no}/ship` | 发货，要求承运商/运单号 |
 | POST | `/api/v1/admin/orders/{order_no}/deliver` | 确认送达 |
-| POST | `/api/v1/admin/orders/{order_no}/complete` | 完成订单 |
+| POST | `/api/v1/admin/orders/{order_no}/complete` | 完成订单：status=COMPLETED、fulfillment_status=COMPLETED、completed_at |
 | POST | `/api/v1/admin/orders/close-expired` | 关闭过期订单 |
 | GET | `/api/v1/admin/payments` | 支付列表 |
 | GET | `/api/v1/admin/payments/{payment_no}` | 支付详情 |
@@ -665,10 +725,10 @@ orders
 | POST | `/api/v1/admin/refunds/{refund_no}/retry` | 重试失败退款 |
 | GET | `/api/v1/admin/after-sales` | 售后列表 |
 | GET | `/api/v1/admin/after-sales/{after_sales_no}` | 售后详情 |
-| POST | `/api/v1/admin/after-sales/{after_sales_no}/approve` | 审核通过 |
-| POST | `/api/v1/admin/after-sales/{after_sales_no}/reject` | 审核拒绝 |
-| POST | `/api/v1/admin/after-sales/{after_sales_no}/receive` | 确认收货 |
-| POST | `/api/v1/admin/after-sales/{after_sales_no}/complete-exchange` | 换货补发完成 |
+| POST | `/api/v1/admin/after-sales/{after_sales_no}/approve` | 审核通过；仅 PENDING_REVIEW，不接收金额参数 |
+| POST | `/api/v1/admin/after-sales/{after_sales_no}/reject` | 审核拒绝；仅 PENDING_REVIEW |
+| POST | `/api/v1/admin/after-sales/{after_sales_no}/receive` | 确认收货；仅 RETURN_SHIPPED |
+| POST | `/api/v1/admin/after-sales/{after_sales_no}/complete-exchange` | 换货补发完成；仅 RECEIVED |
 
 ### 5.4 请求/响应示例
 
@@ -741,6 +801,7 @@ ORDER_ITEM_RESERVATION_MISMATCH
 IDEMPOTENCY_KEY_CONFLICT
 PAYMENT_NOT_FOUND
 PAYMENT_AMOUNT_MISMATCH
+PAYMENT_CHANNEL_CONFLICT
 PAYMENT_NOT_RETRYABLE
 INVALID_ALIPAY_SIGNATURE
 ALIPAY_NOT_CONFIGURED
@@ -854,49 +915,135 @@ orders
 
 ### 7.2 订单创建
 
+请求指纹：
+
 ```text
-BEGIN
-  幂等查询
-  锁 products（id 升序）
-  锁 skus（id 升序）
-  校验商品/SKU/库存
-  INSERT orders
-  INSERT order_items（flush 获取 item_id）
-  FOR item ORDER BY sku_id:
-    UPDATE inventory
-      SET reserved_quantity = reserved_quantity + qty
-      WHERE sku_id = ?
-        AND total_quantity - reserved_quantity >= qty
-    rowcount 必须为 1
-    INSERT inventory_transactions (RESERVE)
-COMMIT
+canonical_json = json.dumps(
+  {
+    "items": [{"sku_code": "...", "quantity": ...}] 按 sku_code 升序,
+    "receiver_name": "...",
+    "receiver_phone": "...",
+    "receiver_address": "...",
+    "customer_remark": "..."
+  },
+  ensure_ascii=False,
+  sort_keys=True,
+  separators=(",", ":")
+)
+request_fingerprint = SHA-256(canonical_json.encode("utf-8")).hexdigest()
 ```
 
-任一失败整体回滚。
+- 指纹由服务端生成并保存到 `orders.request_fingerprint`；
+- `items` 每项包含 `sku_code` 和 `quantity`，`quantity` 参与 SHA-256；
+- 相同 SKU、不同购买数量会产生不同指纹；
+- 不信任客户端传入的指纹；
+- 相同 `(user_id, idempotency_key)` 必须比较指纹，不能只凭幂等键返回原订单。
 
-### 7.3 订单取消
+```text
+BEGIN
+  1. 快速查询 (user_id, idempotency_key)
+     - 存在且指纹一致：返回原订单
+     - 存在且指纹不一致：409 IDEMPOTENCY_KEY_CONFLICT
+
+  2. 锁 products（id 升序）
+  3. 锁 skus（id 升序）
+  4. 校验商品/SKU/库存
+  5. INSERT orders（含 request_fingerprint）
+  6. INSERT order_items（flush 获取 item_id）
+  7. FOR item ORDER BY sku_id:
+       UPDATE inventory
+         SET reserved_quantity = reserved_quantity + qty
+         WHERE sku_id = ?
+           AND total_quantity - reserved_quantity >= qty
+       rowcount 必须为 1
+       INSERT inventory_transactions (RESERVE)
+  8. COMMIT
+```
+
+并发幂等：
+
+- `(user_id, idempotency_key)` 唯一约束是最终保障；
+- 两个请求同时通过快速查询时，只有一个能插入订单；
+- 插入唯一约束冲突时，失败事务整体回滚；
+- 回滚后按 `(user_id, idempotency_key)` 查询原订单；
+- 指纹一致返回原订单；
+- 指纹不一致返回 409 `IDEMPOTENCY_KEY_CONFLICT`；
+- 唯一冲突时整个事务回滚，已执行的预占不会提交；
+- 不允许仅凭幂等键相同就返回原订单，必须比较指纹。
+
+#### 7.2.1 支付单创建
 
 ```text
 BEGIN
   SELECT order FOR UPDATE
-  校验 PENDING_PAYMENT
-  FOR item ORDER BY sku_id:
-    UPDATE inventory SET reserved_quantity = reserved_quantity - qty
-      WHERE sku_id = ? AND reserved_quantity >= qty
-    rowcount 必须为 1
-    INSERT inventory_transactions (RELEASE)
-  UPDATE payments
-    SET status='CLOSED', closed_at=UTC_TIMESTAMP(6)
-    WHERE order_id=? AND status='PENDING'
-  UPDATE orders SET status='CANCELLED', cancelled_at=UTC_TIMESTAMP(6)
+  校验：
+    - orders.status = PENDING_PAYMENT
+    - now <= orders.expires_at
+    - 订单未取消/关闭/过期
+
+  SELECT payment FOR UPDATE
+  IF payment 存在:
+     - status 为 FAILED/CLOSED：409 PAYMENT_NOT_RETRYABLE
+     - channel 与请求不一致：409 PAYMENT_CHANNEL_CONFLICT
+     - 否则返回已有 payment
+
+  INSERT payment (status='PENDING', channel=请求渠道)
 COMMIT
+```
+
+- 订单锁内同时校验状态、过期时间和已有支付单渠道；
+- 不允许为已取消、已关闭、已过期订单创建支付单；
+- 一个订单最多一个支付单。
+
+### 7.3 订单取消与超时关闭
+
+统一锁顺序：
+
+```text
+orders → payments → inventory（按 sku_id 升序）
+```
+
+订单明细只读，不需要行锁；不得先锁库存再锁支付单。
+
+流程：
+
+```text
+BEGIN
+  1. SELECT order FOR UPDATE
+     校验：
+       - 用户取消：PENDING_PAYMENT；
+       - 超时关闭：PENDING_PAYMENT AND expires_at <= UTC_TIMESTAMP(6)
+
+  2. 如果存在支付单：
+       SELECT payment FOR UPDATE
+
+  3. FOR item ORDER BY sku_id:
+       UPDATE inventory SET reserved_quantity = reserved_quantity - qty
+         WHERE sku_id = ? AND reserved_quantity >= qty
+       rowcount 必须为 1
+       INSERT inventory_transactions (RELEASE)
+
+  4. 如果支付单仍为 PENDING：
+       UPDATE payments
+         SET status='CLOSED', closed_at=UTC_TIMESTAMP(6)
+         WHERE id=? AND status='PENDING'
+
+  5. 用户取消：
+       UPDATE orders SET status='CANCELLED', cancelled_at=UTC_TIMESTAMP(6)
+     超时关闭：
+       UPDATE orders SET status='CLOSED', closed_at=UTC_TIMESTAMP(6)
+
+  6. COMMIT
 ```
 
 提交后：
 
-- 尽力调用支付宝关闭接口；
+- 对本地已关闭的支付尝试，尽力调用支付宝关闭接口；
 - 外部关闭失败只记录日志，不回滚本地取消；
-- 后续成功回调按晚到支付规则处理。
+- 后续仍收到成功回调时，按晚到支付规则处理；
+- 晚到支付不得恢复订单、不得重新预占、不得扣库存。
+
+不使用复杂锁管理或死锁恢复框架。
 
 ### 7.4 支付成功
 
@@ -908,8 +1055,25 @@ BEGIN
   IF payment 已 SUCCESS: 幂等返回
   IF order CLOSED/CANCELLED:
      payment = SUCCESS
+     payment.paid_at = UTC_TIMESTAMP(6)
      payment.exception_reason = LATE_PAYMENT
-     不改变订单、不改变库存
+     order.payment_status = PAID
+     order.paid_amount = payment.amount
+     order.paid_at = payment.paid_at
+     不改变订单 business status、不改变库存
+  ELSE IF order PENDING_PAYMENT AND order.expires_at <= UTC_TIMESTAMP(6):
+     FOR item ORDER BY sku_id:
+       释放该订单明细预占（与超时关闭相同）
+       INSERT inventory_transactions (RELEASE)
+     payment = SUCCESS
+     payment.paid_at = UTC_TIMESTAMP(6)
+     payment.exception_reason = LATE_PAYMENT
+     order.status = CLOSED
+     order.closed_at = UTC_TIMESTAMP(6)
+     order.payment_status = PAID
+     order.paid_amount = payment.amount
+     order.paid_at = payment.paid_at
+     不执行 RESERVED_OUTBOUND
   ELSE IF order PENDING_PAYMENT:
      FOR item ORDER BY sku_id:
        校验明细净预占
@@ -921,6 +1085,7 @@ BEGIN
            AND total_quantity >= qty
        INSERT inventory_transactions (RESERVED_OUTBOUND)
      payment = SUCCESS
+     payment.paid_at = UTC_TIMESTAMP(6)
      order = PAID
      order.payment_status = PAID
      order.paid_at = payment.paid_at
@@ -935,6 +1100,23 @@ COMMIT
 - 返回 failure；
 - 不自动创建 STOCK_ERROR 状态，不执行额外恢复事务；
 - 等待支付宝重试或管理员处理。
+
+支付回调只涉及 `orders → payments → inventory`，跳过未使用的 `order_items/after_sales/refunds`，不反向加锁。
+
+#### 7.4.1 完成订单
+
+```text
+BEGIN
+  SELECT order FOR UPDATE
+  校验订单已 DELIVERED
+  UPDATE orders
+    SET status='COMPLETED',
+        fulfillment_status='COMPLETED',
+        completed_at=UTC_TIMESTAMP(6)
+  COMMIT
+```
+
+订单完成、履约状态、完成时间必须在同一事务内更新。
 
 ### 7.5 退款额度
 
@@ -964,6 +1146,21 @@ COMMIT
 
 外部退款调用在事务外；提交后置 `PROCESSING`；结果未知时继续占用额度，管理员重试/查询，不自动收敛。
 
+外部结果回写：
+
+- `SUCCESS`：更新 `refunds.status`、`payments.refunded_amount`、`orders.refunded_amount`；主支付再更新 `orders.payment_status`；售后关联时更新售后状态；
+- `FAILED`：退款为 `FAILED`，释放额度；售后关联时进入 `REFUND_FAILED`；
+- 晚到支付退款成功不回补库存；
+- 需要回补库存的退款，在 `refunds` 更新后按 `inventory` 的 `sku_id` 升序加锁并入库，遵守 `refunds → inventory` 顺序。
+
+退款 `PENDING` 异常处理：
+
+- 长期 PENDING 由管理员人工核查；
+- 确认外部退款请求尚未发起，才可用原退款单号发起；
+- 外部结果未知时先查询；
+- 不创建新的退款单；
+- 不允许重复发起可能导致重复退款的请求。
+
 ### 7.6 售后申请
 
 ```text
@@ -976,10 +1173,45 @@ COMMIT
 5. 锁后重查幂等键
 6. 查询该明细其他活跃售后
    - 存在：409 AFTER_SALES_ALREADY_EXISTS
-7. 校验类型、期限、订单状态、金额
+7. 校验类型、期限、订单状态、金额：
+   - quantity 必须等于 order_item.quantity
+   - requested_amount 必须等于 order_item.line_amount
 8. INSERT after_sales
 9. COMMIT
 ```
+
+审核通过时：
+
+- 不接收客户端金额参数；
+- `approved_amount = requested_amount`；
+- 不允许部分金额或部分数量；
+- 售后类型、订单状态和期限仍需校验。
+
+售后接口状态前置条件：
+
+| 操作 | 允许状态 |
+|---|---|
+| approve | `PENDING_REVIEW` |
+| reject | `PENDING_REVIEW` |
+| 用户 cancel | `PENDING_REVIEW` |
+| return-shipment | `WAITING_RETURN` |
+| receive | `RETURN_SHIPPED` |
+| complete-exchange | `RECEIVED` |
+
+所有操作在 `orders → order_items → after_sales` 锁内重新校验状态；不匹配返回 409 `AFTER_SALES_STATUS_CONFLICT`。重复请求不得重复退款、入库或补发。
+
+售后事务如果涉及支付、退款或库存，按全局锁顺序继续加锁：
+
+```text
+orders → order_items → payments → after_sales → refunds → inventory
+```
+
+- approve（REFUND_ONLY）：`orders → order_items → payments → after_sales → refunds`
+- receive（RETURN_REFUND）：`orders → order_items → payments → after_sales → refunds → inventory`
+- complete-exchange：`orders → order_items → after_sales → inventory`
+- 用户 cancel：`orders → order_items → after_sales`
+
+不涉及的表可以跳过，但不得反向加锁。receive 必须先完成退款记录/状态变更，再进行退货入库；complete-exchange 必须先完成售后状态校验，再执行补发出库。
 
 请求指纹：
 
@@ -1076,9 +1308,17 @@ refund:{refund_id}:restock
 - 多 SKU 预留；
 - 库存不足整体回滚；
 - 订单幂等；
+- 同一用户、同一幂等键并发创建（真实 MySQL）：
+  - 唯一约束最终保障；
+  - 只创建一个订单；
+  - 不重复预占库存；
+  - 同指纹返回原订单；
+  - 异指纹 409 `IDEMPOTENCY_KEY_CONFLICT`；
 - 用户隔离；
 - 管理员查询；
 - 发货/送达/完成；
+- 完成订单同时更新 `fulfillment_status=COMPLETED` 和 `completed_at`；
+- 取消/超时锁顺序：`orders → payments → inventory`；
 - 取消关闭支付、释放库存；
 - 已支付不可直接取消；
 - 过期关闭；
@@ -1096,13 +1336,31 @@ refund:{refund_id}:restock
 ### 9.3 支付
 
 - MOCK 成功/失败；
+- 支付创建前置条件：
+  - 非 PENDING_PAYMENT 拒绝；
+  - 已取消/关闭/过期拒绝；
+  - 渠道不一致 409；
+  - FAILED/CLOSED 不重建；
 - 支付回调重复不重复扣库存；
 - 金额/签名/app_id/seller_id 校验；
 - 订单 PAID 与库存扣减一致；
+- PENDING_PAYMENT 已过期时回调：
+  - 订单锁内释放预占；
+  - 订单 CLOSED；
+  - 记录支付成功和 LATE_PAYMENT；
+  - 不扣库存、不恢复订单；
 - 取消与回调竞争；
-- 晚到支付记录 `LATE_PAYMENT` 且不恢复订单；
+- 晚到支付：
+  - `payment.status=SUCCESS`；
+  - `exception_reason=LATE_PAYMENT`；
+  - 订单业务状态保持 CLOSED/CANCELLED；
+  - 订单 `payment_status=PAID`、`paid_amount`、`paid_at` 正确；
+  - 不扣库存；
+  - 手动退款成功不回补库存；
 - `return_url` 不改变状态；
-- 支付查询补偿。
+- 支付查询补偿；
+- 支付单 FAILED/CLOSED 不重建；
+- 用户取消订单后重新下单支付。
 
 ### 9.4 退款
 
@@ -1113,11 +1371,18 @@ refund:{refund_id}:restock
 - PENDING/PROCESSING 占用额度；
 - FAILED 释放额度；
 - 退款与订单/支付/售后状态一致；
-- 晚到支付退款不回补库存。
+- 晚到支付退款不回补库存；
+- 长期 PENDING 由管理员人工核查；
+- PENDING 未发起外部请求时才允许复用原退款单号；
+- 外部未知先查询，不创建新退款单。
 
 ### 9.5 售后
 
 - 三类售后；
+- 整行售后：`quantity = order_item.quantity`；
+- 申请金额等于 `order_item.line_amount`；
+- 审核通过 `approved_amount = requested_amount`，不允许部分金额；
+- 审核接口不接收金额参数；
 - 审核/拒绝/取消；
 - 退货物流/收货；
 - 退货入库；
@@ -1126,6 +1391,14 @@ refund:{refund_id}:restock
 - 同键同指纹返回原单；
 - 同键异指纹冲突；
 - 异键活跃售后冲突；
+- 售后接口状态前置：
+  - approve/reject 仅 PENDING_REVIEW；
+  - 用户 cancel 仅 PENDING_REVIEW；
+  - return-shipment 仅 WAITING_RETURN；
+  - receive 仅 RETURN_SHIPPED；
+  - complete-exchange 仅 RECEIVED；
+- 状态不匹配返回 409；
+- 并发重复请求不重复退款、入库或补发；
 - 并发申请只成功一条；
 - 权限隔离。
 
@@ -1149,7 +1422,10 @@ refund:{refund_id}:restock
 - 创建 `orders`、`order_items`、`payments`、`refunds`、`after_sales`；
 - `payments.order_id` 唯一；
 - `orders` 包含 shipping 字段；
+- `orders` 包含 `request_fingerprint` 字段；
 - `refunds` 包含 PENDING/PROCESSING/SUCCESS/FAILED；
+- `after_sales.approved_amount` 只能为空或等于 `requested_amount`；
+- 整行售后约束：`quantity=order_item.quantity`、`requested_amount=line_amount`；
 - 幂等唯一约束按范围建立；
 - Alembic upgrade/downgrade/upgrade；
 - `alembic check`；
@@ -1171,8 +1447,13 @@ refund:{refund_id}:restock
 - 创建、列表、详情、取消；
 - 快照、金额、用户隔离；
 - 发货/送达/完成；
+- 完成订单同一事务更新 `status=COMPLETED`、`fulfillment_status=COMPLETED`、`completed_at`；
 - `shipping_carrier`、`tracking_no` 必填；
+- 取消/超时锁顺序 `orders → payments → inventory`；
 - 订单幂等；
+- 同一用户同幂等键并发只创建一个订单（真实 MySQL）；唯一冲突回滚后比较指纹；
+- 指纹不一致返回 IDEMPOTENCY_KEY_CONFLICT；
+- 不重复预占库存；
 - 多 SKU 原子性；
 - 过期关闭服务；
 - 公开路径使用 `order_no`。
@@ -1180,11 +1461,17 @@ refund:{refund_id}:restock
 ### TASK-004.5 MOCK 支付
 
 - 一个订单一个支付单；
+- 创建支付校验订单 PENDING_PAYMENT、未过期、渠道一致；
+- 已取消/关闭/过期订单不能创建支付；
+- FAILED/CLOSED 不重建；
 - MOCK success/fail；
 - 支付成功扣减预占；
+- 回调时 PENDING_PAYMENT 已过期：释放预占并记录 LATE_PAYMENT，不扣库存；
 - 重复回调幂等；
 - 取消/支付竞争；
-- 晚到支付基本标记；
+- 晚到支付订单支付汇总正确：`payment_status=PAID`、`paid_amount`、`paid_at`；
+- 晚到支付手动退款成功不回补库存；
+- 用户取消订单释放库存后重新下单；
 - 生产禁用 MOCK；
 - 不实现多笔支付对账。
 
@@ -1208,6 +1495,9 @@ refund:{refund_id}:restock
 - 金额校验包含 PENDING/PROCESSING；
 - 支付单锁内原子创建；
 - 失败重试；
+- 长期 PENDING 人工核查；
+- PENDING 未发起外部请求时才允许复用原退款单号；
+- 外部未知先查询，不创建新退款；
 - 退款与售后一致；
 - 晚到支付退款；
 - 不做自动未知状态收敛。
@@ -1215,10 +1505,19 @@ refund:{refund_id}:restock
 ### TASK-004.8 售后
 
 - 三类售后；
+- 整行售后：`quantity=order_item.quantity`、`requested_amount=line_amount`；
+- 审核通过 `approved_amount=requested_amount`；
+- 审核接口不接收金额参数；
 - 申请锁 order_item；
 - 同键幂等返回原单；
 - 异键活跃售后拒绝；
 - 审核/取消/物流/收货；
+- approve/reject 仅 PENDING_REVIEW；
+- 用户 cancel 仅 PENDING_REVIEW；
+- return-shipment 仅 WAITING_RETURN；
+- receive 仅 RETURN_SHIPPED；
+- complete-exchange 仅 RECEIVED；
+- 状态不匹配 409，重复请求不重复退款/入库/补发；
 - 退货入库；
 - 换货入库/补发；
 - 三类期限；
