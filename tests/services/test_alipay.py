@@ -1,5 +1,7 @@
+import json
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import SecretStr
@@ -62,3 +64,54 @@ def test_alipay_build_url_and_verify_notify(monkeypatch):
 
     params["total_amount"] = "20.00"
     assert client.verify_notify(params) is False
+
+
+@pytest.mark.asyncio
+async def test_alipay_refund_request_contains_stable_request_no(monkeypatch):
+    private, public = _keypair()
+    monkeypatch.setattr(settings, "alipay_app_id", "sandbox-app")
+    monkeypatch.setattr(settings, "alipay_private_key", SecretStr(private))
+    monkeypatch.setattr(settings, "alipay_public_key", SecretStr(public))
+
+    captured: dict[str, str] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"alipay_trade_refund_response": {"code": "10000"}}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, data):
+            captured.update(data)
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.alipay.httpx.AsyncClient",
+        FakeClient,
+    )
+    client = AlipayClient()
+    await client.refund_trade(
+        out_trade_no="PAY123",
+        refund_amount="19.90",
+        out_request_no="RFD123",
+        refund_reason="full refund",
+    )
+
+    assert captured["method"] == "alipay.trade.refund"
+    assert captured["sign_type"] == "RSA2"
+    assert "sign" in captured
+    biz = json.loads(captured["biz_content"])
+    assert biz["out_trade_no"] == "PAY123"
+    assert biz["out_request_no"] == "RFD123"
+    assert biz["refund_amount"] == "19.90"

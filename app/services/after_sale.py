@@ -298,6 +298,7 @@ class AfterSaleService:
         admin_id: int,
         review_note: str | None,
     ) -> AfterSale:
+        refund = None
         async with transaction_context(self.session):
             after_sale, order, _item, payment = await self._get_locked(
                 after_sales_no=after_sales_no,
@@ -345,6 +346,9 @@ class AfterSaleService:
                 after_sale.status = "WAITING_RETURN"
 
             await self.after_sales.save(after_sale)
+
+        if refund is not None and refund.channel == "ALIPAY":
+            await self.refunds.process_alipay_refund(refund_no=refund.refund_no)
         return await self._detail(after_sales_no)
 
     async def reject(
@@ -456,6 +460,9 @@ class AfterSaleService:
                 after_sale.status = "RECEIVED"
 
             await self.after_sales.save(after_sale)
+
+        if refund is not None and refund.channel == "ALIPAY":
+            await self.refunds.process_alipay_refund(refund_no=refund.refund_no)
         return await self._detail(after_sales_no)
 
     async def complete_exchange(

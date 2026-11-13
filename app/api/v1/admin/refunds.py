@@ -88,3 +88,17 @@ async def retry_refund(
 ) -> RefundResponse:
     refund = await RefundService(session).retry(refund_no=refund_no)
     return await _response(session, refund)
+
+
+@router.post(
+    "/{refund_no}/sync",
+    response_model=RefundResponse,
+    summary="Query an unknown Alipay refund result",
+)
+async def sync_refund(
+    refund_no: Annotated[str, Path(min_length=1, max_length=32)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    _admin: CurrentAdmin,
+) -> RefundResponse:
+    refund = await RefundService(session).sync_alipay_refund(refund_no=refund_no)
+    return await _response(session, refund)

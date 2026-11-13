@@ -6,14 +6,17 @@ from types import SimpleNamespace
 from typing import Annotated
 from uuid import uuid4
 
+import httpx
 import pytest
 import pytest_asyncio
 from fastapi import Depends
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal, get_db
 from app.main import app
 from app.models.after_sale import AfterSale
@@ -27,6 +30,7 @@ from app.models.product import Product
 from app.models.refund import Refund
 from app.models.sku import Sku
 from app.models.user import User
+from app.services.alipay import AlipayClient
 from app.utils.order import utc_now
 
 PREFIX = "t4flow"
@@ -887,3 +891,371 @@ async def test_unauthenticated_request(flow):
     app.dependency_overrides.pop(get_current_user, None)
     response = await client.get("/api/v1/orders")
     assert response.status_code == 401
+
+
+def _configure_alipay(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "alipay_app_id", "sandbox-app")
+    monkeypatch.setattr(
+        settings,
+        "alipay_private_key",
+        SecretStr("dummy-private-key"),
+    )
+    monkeypatch.setattr(
+        settings,
+        "alipay_public_key",
+        SecretStr("dummy-public-key"),
+    )
+
+
+async def _alipay_order(flow) -> tuple[str, str]:
+    order_no = await _create_paid_order(flow, 1)
+    async with AsyncSessionLocal() as session:
+        order = (
+            await session.execute(select(Order).where(Order.order_no == order_no))
+        ).scalar_one()
+        payment = (
+            await session.execute(select(Payment).where(Payment.order_id == order.id))
+        ).scalar_one()
+        payment.channel = "ALIPAY"
+        payment_no = payment.payment_no
+        await session.commit()
+    return order_no, payment_no
+
+
+@pytest.mark.asyncio
+async def test_alipay_full_refund_success(flow, monkeypatch):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    order_no, payment_no = await _alipay_order(
+        flow,
+    )
+    calls: list[str] = []
+
+    async def fake_refund(
+        self,
+        *,
+        out_trade_no,
+        refund_amount,
+        out_request_no,
+        refund_reason=None,
+    ):
+        calls.append(out_request_no)
+        return {
+            "alipay_trade_refund_response": {
+                "code": "10000",
+                "fund_change": "Y",
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+                "refund_fee": str(refund_amount),
+                "trade_no": "ALI-TRADE-1",
+            }
+        }
+
+    monkeypatch.setattr(AlipayClient, "refund_trade", fake_refund)
+    state["current"]["user"] = state["admin"]
+    response = await client.post(
+        "/api/v1/admin/refunds",
+        json={
+            "payment_no": payment_no,
+            "amount": "19.90",
+            "reason": "full refund",
+            "idempotency_key": f"ali-refund-{uuid4().hex}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "SUCCESS"
+    assert len(calls) == 1
+
+    async with AsyncSessionLocal() as session:
+        order = (
+            await session.execute(select(Order).where(Order.order_no == order_no))
+        ).scalar_one()
+        refund = (
+            await session.execute(
+                select(Refund).where(Refund.refund_no == response.json()["refund_no"])
+            )
+        ).scalar_one()
+        assert order.payment_status == "REFUNDED"
+        assert refund.provider_refund_no == "ALI-TRADE-1"
+
+
+@pytest.mark.asyncio
+async def test_alipay_refund_failure(flow, monkeypatch):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    _, payment_no = await _alipay_order(flow)
+
+    async def fake_refund(
+        self,
+        *,
+        out_trade_no,
+        refund_amount,
+        out_request_no,
+        refund_reason=None,
+    ):
+        return {
+            "alipay_trade_refund_response": {
+                "code": "40004",
+                "msg": "Business Failed",
+                "sub_code": "ACQ.SYSTEM_ERROR",
+                "sub_msg": "refund failed",
+            }
+        }
+
+    monkeypatch.setattr(AlipayClient, "refund_trade", fake_refund)
+    state["current"]["user"] = state["admin"]
+    response = await client.post(
+        "/api/v1/admin/refunds",
+        json={
+            "payment_no": payment_no,
+            "amount": "19.90",
+            "reason": "failure",
+            "idempotency_key": f"ali-fail-{uuid4().hex}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "FAILED"
+    assert response.json()["failure_code"] == "40004"
+
+
+@pytest.mark.asyncio
+async def test_alipay_refund_timeout_then_query(flow, monkeypatch):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    _, payment_no = await _alipay_order(flow)
+
+    async def fake_refund(
+        self,
+        *,
+        out_trade_no,
+        refund_amount,
+        out_request_no,
+        refund_reason=None,
+    ):
+        raise httpx.ReadTimeout("timeout")
+
+    async def fake_query(self, *, out_trade_no, out_request_no):
+        return {
+            "alipay_trade_fastpay_refund_query_response": {
+                "code": "10000",
+                "refund_status": "REFUND_SUCCESS",
+                "fund_change": "Y",
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+                "refund_amount": "19.90",
+                "trade_no": "ALI-QUERY-1",
+            }
+        }
+
+    monkeypatch.setattr(AlipayClient, "refund_trade", fake_refund)
+    monkeypatch.setattr(AlipayClient, "query_refund", fake_query)
+    state["current"]["user"] = state["admin"]
+    refund = await client.post(
+        "/api/v1/admin/refunds",
+        json={
+            "payment_no": payment_no,
+            "amount": "19.90",
+            "reason": "timeout",
+            "idempotency_key": f"ali-timeout-{uuid4().hex}",
+        },
+    )
+    assert refund.status_code == 201, refund.text
+    assert refund.json()["status"] == "PROCESSING"
+    refund_no = refund.json()["refund_no"]
+
+    synced = await client.post(f"/api/v1/admin/refunds/{refund_no}/sync")
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["status"] == "SUCCESS"
+
+
+@pytest.mark.asyncio
+async def test_alipay_refund_duplicate_idempotency_and_unknown_response(
+    flow, monkeypatch
+):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    _, payment_no = await _alipay_order(flow)
+    calls: list[str] = []
+
+    async def fake_refund(
+        self,
+        *,
+        out_trade_no,
+        refund_amount,
+        out_request_no,
+        refund_reason=None,
+    ):
+        calls.append(out_request_no)
+        return {
+            "alipay_trade_refund_response": {
+                "code": "10000",
+                "fund_change": "N",
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+                "refund_fee": str(refund_amount),
+            }
+        }
+
+    async def fake_query(self, *, out_trade_no, out_request_no):
+        return {
+            "alipay_trade_fastpay_refund_query_response": {
+                "code": "10000",
+                "refund_status": "REFUND_SUCCESS",
+                "fund_change": "Y",
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+                "refund_amount": "19.90",
+            }
+        }
+
+    monkeypatch.setattr(AlipayClient, "refund_trade", fake_refund)
+    monkeypatch.setattr(AlipayClient, "query_refund", fake_query)
+    state["current"]["user"] = state["admin"]
+    key = f"ali-dup-{uuid4().hex}"
+    payload = {
+        "payment_no": payment_no,
+        "amount": "19.90",
+        "reason": "unknown",
+        "idempotency_key": key,
+    }
+    first = await client.post("/api/v1/admin/refunds", json=payload)
+    assert first.status_code == 201, first.text
+    assert first.json()["status"] == "PROCESSING"
+
+    second = await client.post("/api/v1/admin/refunds", json=payload)
+    assert second.status_code == 201, second.text
+    assert second.json()["refund_no"] == first.json()["refund_no"]
+    assert len(calls) == 1
+
+    refund_no = first.json()["refund_no"]
+    synced = await client.post(f"/api/v1/admin/refunds/{refund_no}/sync")
+    assert synced.status_code == 200, synced.text
+    assert synced.json()["status"] == "SUCCESS"
+
+
+@pytest.mark.asyncio
+async def test_alipay_refund_only_after_sales_success(flow, monkeypatch):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    order_no, _ = await _alipay_order(flow)
+
+    async def fake_refund(
+        self,
+        *,
+        out_trade_no,
+        refund_amount,
+        out_request_no,
+        refund_reason=None,
+    ):
+        return {
+            "alipay_trade_refund_response": {
+                "code": "10000",
+                "fund_change": "Y",
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+                "refund_fee": str(refund_amount),
+                "trade_no": "ALI-AS-1",
+            }
+        }
+
+    monkeypatch.setattr(AlipayClient, "refund_trade", fake_refund)
+    applied = await client.post(
+        f"/api/v1/orders/{order_no}/after-sales",
+        json={
+            "sku_code": state["sku_code"],
+            "type": "REFUND_ONLY",
+            "reason": "alipay refund",
+            "idempotency_key": f"ali-as-{uuid4().hex}",
+        },
+    )
+    assert applied.status_code == 201, applied.text
+    after_sales_no = applied.json()["after_sales_no"]
+
+    state["current"]["user"] = state["admin"]
+    approved = await client.post(
+        f"/api/v1/admin/after-sales/{after_sales_no}/approve",
+        json={"review_note": "ok"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "COMPLETED"
+
+    async with AsyncSessionLocal() as session:
+        order = (
+            await session.execute(select(Order).where(Order.order_no == order_no))
+        ).scalar_one()
+        assert order.payment_status == "REFUNDED"
+
+
+@pytest.mark.asyncio
+async def test_alipay_partial_refund_is_rejected(flow, monkeypatch):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    _, payment_no = await _alipay_order(flow)
+    state["current"]["user"] = state["admin"]
+    response = await client.post(
+        "/api/v1/admin/refunds",
+        json={
+            "payment_no": payment_no,
+            "amount": "10.00",
+            "reason": "partial",
+            "idempotency_key": f"ali-partial-{uuid4().hex}",
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "REFUND_NOT_ALLOWED"
+
+
+@pytest.mark.asyncio
+async def test_alipay_refund_retry_reuses_out_request_no(flow, monkeypatch):
+    client, state = flow
+    _configure_alipay(monkeypatch)
+    _, payment_no = await _alipay_order(flow)
+    calls: list[str] = []
+    should_fail = True
+
+    async def fake_refund(
+        self,
+        *,
+        out_trade_no,
+        refund_amount,
+        out_request_no,
+        refund_reason=None,
+    ):
+        calls.append(out_request_no)
+        if should_fail:
+            return {
+                "alipay_trade_refund_response": {
+                    "code": "40004",
+                    "msg": "temporary",
+                }
+            }
+        return {
+            "alipay_trade_refund_response": {
+                "code": "10000",
+                "fund_change": "Y",
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+                "refund_fee": str(refund_amount),
+            }
+        }
+
+    monkeypatch.setattr(AlipayClient, "refund_trade", fake_refund)
+    state["current"]["user"] = state["admin"]
+    first = await client.post(
+        "/api/v1/admin/refunds",
+        json={
+            "payment_no": payment_no,
+            "amount": "19.90",
+            "reason": "retry",
+            "idempotency_key": f"ali-retry-{uuid4().hex}",
+        },
+    )
+    assert first.status_code == 201, first.text
+    assert first.json()["status"] == "FAILED"
+    refund_no = first.json()["refund_no"]
+
+    should_fail = False
+    retried = await client.post(f"/api/v1/admin/refunds/{refund_no}/retry")
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["status"] == "SUCCESS"
+    assert calls == [refund_no, refund_no]

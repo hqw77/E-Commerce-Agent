@@ -306,20 +306,26 @@ GET /api/v1/payments/alipay/return
 当前代码状态：
 
 ```text
-支付宝退款记录可以创建为 PENDING/PROCESSING
-尚未在 RefundService 中接入真实 alipay.trade.refund 网络调用
+已接入 alipay.trade.refund
+已接入 alipay.trade.fastpay.refund.query
+out_request_no = refund_no（稳定、可重试）
+已校验 code / fund_change / out_trade_no / out_request_no / refund_fee
+网络超时或未知结果保留 PROCESSING
+管理端可通过 sync 接口查询确认
 ```
 
-因此真实沙箱全额退款 E2E **目前不能直接通过**。在开始此步骤前，需要：
+真实沙箱全额退款 E2E 仍需在配置沙箱后进行，步骤：
 
-1. 实现 `alipay.trade.refund` 调用；
-2. 使用稳定 `out_request_no`；
-3. 校验 `fund_change=Y`，不能只看 `code=10000`；
-4. 结果未知时先查询，不创建新退款单；
-5. 退款成功后更新支付/订单/售后状态；
-6. 保持 MOCK 退款作为自动化测试路径。
+1. 创建已支付的 ALIPAY 订单；
+2. 管理员发起全额退款；
+3. 检查 `alipay.trade.refund` 请求参数和签名；
+4. 确认 `fund_change=Y`；
+5. 确认本地 refund、payment、order、after_sales 状态；
+6. 网络异常时使用 sync 查询确认；
+7. 重复请求复用同一 `out_request_no`，不产生重复退款；
+8. 保持 MOCK 退款作为自动化测试路径。
 
-在上述实现完成前，不得宣称支付宝全额退款 E2E 通过。
+未完成真实沙箱调用前，不得宣称支付宝全额退款 E2E 通过。
 
 ---
 
@@ -334,8 +340,12 @@ GET /api/v1/payments/alipay/return
 - 金额和支付单号校验；
 - `alipay.trade.query`；
 - `alipay.trade.close`；
+- `alipay.trade.refund`；
+- `alipay.trade.fastpay.refund.query`；
+- 退款金额、订单号、`out_request_no`、`fund_change` 校验；
+- 退款网络异常保留 PROCESSING，支持 sync 查询；
 - `return_url` 页面；
-- MOCK 支付自动化测试。
+- MOCK 支付/退款自动化测试。
 
 ### 尚未完成
 
@@ -343,7 +353,7 @@ GET /api/v1/payments/alipay/return
 - 真实异步通知；
 - 真实查询/关闭 E2E；
 - 官方 SDK 在 Python 3.12 下的兼容性验证；
-- `alipay.trade.refund` 调用和真实全额退款 E2E；
+- 真实沙箱全额退款 E2E；
 - 公网 HTTPS 回调地址。
 
 ### 风险
@@ -369,7 +379,7 @@ GET /api/v1/payments/alipay/return
 7. `ALIPAY_NOTIFY_URL`；
 8. `ALIPAY_RETURN_URL`；
 9. 是否接受当前内部 RSA2 适配器，还是必须改用官方 SDK；
-10. 是否同意先补 `alipay.trade.refund`，再进行全额退款 E2E。
+10. 是否已准备好全额退款 E2E 的沙箱支付订单。
 
 在以上信息确认前，不进行真实沙箱调用，不伪造通过结果。
 

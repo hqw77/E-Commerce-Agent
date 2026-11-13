@@ -183,3 +183,50 @@ class AlipayClient:
             response = await client.post(self.gateway, data=params)
             response.raise_for_status()
             return response.json()
+
+    async def refund_trade(
+        self,
+        *,
+        out_trade_no: str,
+        refund_amount: Decimal,
+        out_request_no: str,
+        refund_reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Call alipay.trade.refund with a stable out_request_no."""
+        if not self.configured:
+            raise AlipayConfigurationError("Alipay sandbox is not configured")
+        content: dict[str, Any] = {
+            "out_trade_no": out_trade_no,
+            "refund_amount": str(refund_amount),
+            "out_request_no": out_request_no,
+        }
+        if refund_reason:
+            content["refund_reason"] = refund_reason
+        params = self._request_params(
+            method="alipay.trade.refund",
+            biz_content=content,
+        )
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(self.gateway, data=params)
+            response.raise_for_status()
+            return response.json()
+
+    async def query_refund(
+        self,
+        *,
+        out_trade_no: str,
+        out_request_no: str,
+    ) -> dict[str, Any]:
+        if not self.configured:
+            raise AlipayConfigurationError("Alipay sandbox is not configured")
+        params = self._request_params(
+            method="alipay.trade.fastpay.refund.query",
+            biz_content={
+                "out_trade_no": out_trade_no,
+                "out_request_no": out_request_no,
+            },
+        )
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(self.gateway, data=params)
+            response.raise_for_status()
+            return response.json()

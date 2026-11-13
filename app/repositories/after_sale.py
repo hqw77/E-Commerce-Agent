@@ -51,6 +51,16 @@ class AfterSaleRepository:
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
+    async def get_by_id_for_update(
+        self,
+        after_sales_id: int,
+    ) -> AfterSale | None:
+        statement = (
+            select(AfterSale).where(AfterSale.id == after_sales_id).with_for_update()
+        )
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
+
     async def get_by_user_and_key(
         self,
         user_id: int,
