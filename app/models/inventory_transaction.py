@@ -79,7 +79,7 @@ class InventoryTransaction(Base):
     )
 
     transaction_type: Mapped[str] = mapped_column(
-        String(16),
+        String(24),
         nullable=False,
     )
 

@@ -48,6 +48,8 @@ class InventoryTransactionRepository:
         business_type: str,
         operator_id: int | None,
         remark: str | None,
+        business_id: int | None = None,
+        business_item_id: int | None = None,
     ) -> InventoryTransaction:
         transaction = InventoryTransaction(
             sku_id=sku_id,
@@ -58,6 +60,8 @@ class InventoryTransactionRepository:
             reserved_after=reserved_after,
             idempotency_key=idempotency_key,
             business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
             operator_id=operator_id,
             remark=remark,
         )

@@ -370,3 +370,243 @@ class InventoryService:
             operator_id=operator_id,
             remark=remark,
         )
+
+    async def _locked_inventory(self, sku_id: int) -> Inventory:
+        inventory = await self.repository.get_by_sku_id_for_update(sku_id)
+        if inventory is None:
+            raise ResourceNotFoundException(
+                message="Inventory not found",
+                code="INVENTORY_NOT_FOUND",
+            )
+        return inventory
+
+    async def _ledger(
+        self,
+        *,
+        sku_id: int,
+        transaction_type: str,
+        total_delta: int,
+        reserved_delta: int,
+        idempotency_key: str,
+        business_type: str,
+        business_id: int | None,
+        business_item_id: int | None,
+        operator_id: int | None,
+        remark: str | None,
+    ) -> InventoryTransaction:
+        inventory = await self._locked_inventory(sku_id)
+        await self.session.refresh(inventory)
+        return await self.transaction_repository.create(
+            sku_id=sku_id,
+            transaction_type=transaction_type,
+            total_delta=total_delta,
+            reserved_delta=reserved_delta,
+            total_after=inventory.total_quantity,
+            reserved_after=inventory.reserved_quantity,
+            idempotency_key=idempotency_key,
+            business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
+            operator_id=operator_id,
+            remark=remark,
+        )
+
+    async def reserve(
+        self,
+        *,
+        sku_id: int,
+        quantity: int,
+        idempotency_key: str,
+        business_type: str,
+        business_id: int,
+        business_item_id: int | None,
+        operator_id: int | None = None,
+        remark: str | None = None,
+    ) -> InventoryTransaction:
+        """Reserve stock inside the caller's transaction."""
+        if quantity <= 0:
+            raise ValidationException(
+                message="Reserve quantity must be greater than zero",
+                code="INVALID_QUANTITY",
+            )
+
+        await self._locked_inventory(sku_id)
+        rowcount = await self.repository.reserve(sku_id, quantity)
+        if rowcount != 1:
+            raise ConflictException(
+                message="Insufficient available inventory",
+                code="INSUFFICIENT_STOCK",
+            )
+
+        return await self._ledger(
+            sku_id=sku_id,
+            transaction_type="RESERVE",
+            total_delta=0,
+            reserved_delta=quantity,
+            idempotency_key=idempotency_key,
+            business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
+            operator_id=operator_id,
+            remark=remark,
+        )
+
+    async def release(
+        self,
+        *,
+        sku_id: int,
+        quantity: int,
+        idempotency_key: str,
+        business_type: str,
+        business_id: int,
+        business_item_id: int | None,
+        operator_id: int | None = None,
+        remark: str | None = None,
+    ) -> InventoryTransaction:
+        """Release a reservation inside the caller's transaction."""
+        if quantity <= 0:
+            raise ValidationException(
+                message="Release quantity must be greater than zero",
+                code="INVALID_QUANTITY",
+            )
+
+        await self._locked_inventory(sku_id)
+        rowcount = await self.repository.release(sku_id, quantity)
+        if rowcount != 1:
+            raise ConflictException(
+                message="Reserved inventory is insufficient",
+                code="ORDER_ITEM_RESERVATION_MISMATCH",
+            )
+
+        return await self._ledger(
+            sku_id=sku_id,
+            transaction_type="RELEASE",
+            total_delta=0,
+            reserved_delta=-quantity,
+            idempotency_key=idempotency_key,
+            business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
+            operator_id=operator_id,
+            remark=remark,
+        )
+
+    async def deduct_reserved(
+        self,
+        *,
+        sku_id: int,
+        quantity: int,
+        idempotency_key: str,
+        business_type: str,
+        business_id: int,
+        business_item_id: int | None,
+        operator_id: int | None = None,
+        remark: str | None = None,
+    ) -> InventoryTransaction:
+        """Convert a reservation into outbound stock."""
+        if quantity <= 0:
+            raise ValidationException(
+                message="Outbound quantity must be greater than zero",
+                code="INVALID_QUANTITY",
+            )
+
+        await self._locked_inventory(sku_id)
+        rowcount = await self.repository.deduct_reserved(sku_id, quantity)
+        if rowcount != 1:
+            raise ConflictException(
+                message="Reserved inventory is insufficient",
+                code="ORDER_ITEM_RESERVATION_MISMATCH",
+            )
+
+        return await self._ledger(
+            sku_id=sku_id,
+            transaction_type="RESERVED_OUTBOUND",
+            total_delta=-quantity,
+            reserved_delta=-quantity,
+            idempotency_key=idempotency_key,
+            business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
+            operator_id=operator_id,
+            remark=remark,
+        )
+
+    async def restock(
+        self,
+        *,
+        sku_id: int,
+        quantity: int,
+        idempotency_key: str,
+        business_type: str,
+        business_id: int,
+        business_item_id: int | None,
+        operator_id: int | None = None,
+        remark: str | None = None,
+    ) -> InventoryTransaction:
+        """Increase total stock inside the caller's transaction."""
+        if quantity <= 0:
+            raise ValidationException(
+                message="Restock quantity must be greater than zero",
+                code="INVALID_QUANTITY",
+            )
+
+        await self._locked_inventory(sku_id)
+        rowcount = await self.repository.restock(sku_id, quantity)
+        if rowcount != 1:
+            raise ResourceNotFoundException(
+                message="Inventory not found",
+                code="INVENTORY_NOT_FOUND",
+            )
+
+        return await self._ledger(
+            sku_id=sku_id,
+            transaction_type="STOCK_IN",
+            total_delta=quantity,
+            reserved_delta=0,
+            idempotency_key=idempotency_key,
+            business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
+            operator_id=operator_id,
+            remark=remark,
+        )
+
+    async def direct_outbound_for_business(
+        self,
+        *,
+        sku_id: int,
+        quantity: int,
+        idempotency_key: str,
+        business_type: str,
+        business_id: int,
+        business_item_id: int | None,
+        operator_id: int | None = None,
+        remark: str | None = None,
+    ) -> InventoryTransaction:
+        """Decrease total stock inside the caller's transaction."""
+        if quantity <= 0:
+            raise ValidationException(
+                message="Outbound quantity must be greater than zero",
+                code="INVALID_QUANTITY",
+            )
+
+        await self._locked_inventory(sku_id)
+        rowcount = await self.repository.direct_outbound(sku_id, quantity)
+        if rowcount != 1:
+            raise ConflictException(
+                message="Insufficient available inventory",
+                code="INSUFFICIENT_STOCK",
+            )
+
+        return await self._ledger(
+            sku_id=sku_id,
+            transaction_type="DIRECT_OUTBOUND",
+            total_delta=-quantity,
+            reserved_delta=0,
+            idempotency_key=idempotency_key,
+            business_type=business_type,
+            business_id=business_id,
+            business_item_id=business_item_id,
+            operator_id=operator_id,
+            remark=remark,
+        )

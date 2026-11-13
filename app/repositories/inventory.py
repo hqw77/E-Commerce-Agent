@@ -82,3 +82,64 @@ class InventoryRepository:
 
         result = await self.session.execute(statement)
         return int(getattr(result, "rowcount", 0) or 0)
+
+    async def reserve(self, sku_id: int, quantity: int) -> int:
+        statement = (
+            update(Inventory)
+            .where(
+                Inventory.sku_id == sku_id,
+                Inventory.total_quantity - Inventory.reserved_quantity >= quantity,
+            )
+            .values(reserved_quantity=Inventory.reserved_quantity + quantity)
+        )
+        result = await self.session.execute(statement)
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    async def release(self, sku_id: int, quantity: int) -> int:
+        statement = (
+            update(Inventory)
+            .where(
+                Inventory.sku_id == sku_id,
+                Inventory.reserved_quantity >= quantity,
+            )
+            .values(reserved_quantity=Inventory.reserved_quantity - quantity)
+        )
+        result = await self.session.execute(statement)
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    async def deduct_reserved(self, sku_id: int, quantity: int) -> int:
+        statement = (
+            update(Inventory)
+            .where(
+                Inventory.sku_id == sku_id,
+                Inventory.reserved_quantity >= quantity,
+                Inventory.total_quantity >= quantity,
+            )
+            .values(
+                total_quantity=Inventory.total_quantity - quantity,
+                reserved_quantity=Inventory.reserved_quantity - quantity,
+            )
+        )
+        result = await self.session.execute(statement)
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    async def restock(self, sku_id: int, quantity: int) -> int:
+        statement = (
+            update(Inventory)
+            .where(Inventory.sku_id == sku_id)
+            .values(total_quantity=Inventory.total_quantity + quantity)
+        )
+        result = await self.session.execute(statement)
+        return int(getattr(result, "rowcount", 0) or 0)
+
+    async def direct_outbound(self, sku_id: int, quantity: int) -> int:
+        statement = (
+            update(Inventory)
+            .where(
+                Inventory.sku_id == sku_id,
+                Inventory.total_quantity - Inventory.reserved_quantity >= quantity,
+            )
+            .values(total_quantity=Inventory.total_quantity - quantity)
+        )
+        result = await self.session.execute(statement)
+        return int(getattr(result, "rowcount", 0) or 0)

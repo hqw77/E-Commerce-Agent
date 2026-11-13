@@ -63,6 +63,20 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
     jwt_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
+    # Orders / payments / after-sales
+    order_payment_timeout_minutes: int = Field(default=30, ge=1, le=1440)
+    after_sales_window_hours: int = Field(default=168, ge=1, le=720)
+
+    # Alipay sandbox (empty means disabled)
+    alipay_app_id: str = ""
+    alipay_seller_id: str = ""
+    alipay_private_key: SecretStr = SecretStr("")
+    alipay_public_key: SecretStr = SecretStr("")
+    alipay_gateway: str = "https://openapi.alipaydev.com/gateway.do"
+    alipay_notify_url: str = ""
+    alipay_return_url: str = ""
+    alipay_frontend_return_url: str = ""
+
     @field_validator("jwt_issuer", "jwt_audience", mode="before")
     @classmethod
     def validate_jwt_identifiers(cls, value: str) -> str:
