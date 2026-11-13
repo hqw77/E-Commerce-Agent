@@ -1,4 +1,3 @@
-
 from typing import Any
 
 
@@ -35,6 +34,23 @@ class BusinessException(AppException):
             message=message,
             code=code,
             status_code=400,
+            details=details,
+        )
+
+
+class ValidationException(AppException):
+    """Exception raised for business-level request validation failures."""
+
+    def __init__(
+        self,
+        message: str = "Validation failed",
+        code: str = "VALIDATION_ERROR",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            code=code,
+            status_code=422,
             details=details,
         )
 
@@ -104,10 +120,11 @@ class ResourceNotFoundException(AppException):
         self,
         message: str = "Resource not found",
         details: dict[str, Any] | None = None,
+        code: str = "RESOURCE_NOT_FOUND",
     ) -> None:
         super().__init__(
             message=message,
-            code="RESOURCE_NOT_FOUND",
+            code=code,
             status_code=404,
             details=details,
         )
@@ -120,10 +137,11 @@ class ConflictException(AppException):
         self,
         message: str = "Resource conflict",
         details: dict[str, Any] | None = None,
+        code: str = "RESOURCE_CONFLICT",
     ) -> None:
         super().__init__(
             message=message,
-            code="RESOURCE_CONFLICT",
+            code=code,
             status_code=409,
             details=details,
         )

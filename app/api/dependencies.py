@@ -1,4 +1,3 @@
-
 from typing import Annotated
 
 from fastapi import Depends
@@ -6,7 +5,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.exceptions import AuthenticationException
+from app.core.exceptions import (
+    AuthenticationException,
+    PermissionDeniedException,
+)
 from app.core.token import TokenService
 from app.db.session import get_db
 from app.models.user import User
@@ -29,9 +31,7 @@ async def get_current_user(
         )
 
     token_service = TokenService(get_settings())
-    claims = token_service.decode_access_token(
-        credentials.credentials
-    )
+    claims = token_service.decode_access_token(credentials.credentials)
 
     repository = UserRepository(session)
     user = await repository.get_by_id(claims.user_id)
@@ -45,3 +45,16 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_admin(current_user: CurrentUser) -> User:
+    """Require the authenticated user to have administrator privileges."""
+    if not current_user.is_admin:
+        raise PermissionDeniedException(
+            message="Administrator privileges are required",
+        )
+
+    return current_user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]
