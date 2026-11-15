@@ -14,6 +14,7 @@ from app.api.v1.after_sales import order_router as order_after_sales_router
 from app.api.v1.after_sales import router as after_sales_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
+from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.payments import router as payments_router
 
@@ -47,6 +48,12 @@ api_router.include_router(
     payments_router,
     prefix="/payments",
     tags=["Payments"],
+)
+
+api_router.include_router(
+    knowledge_router,
+    prefix="/knowledge",
+    tags=["Knowledge"],
 )
 
 api_router.include_router(

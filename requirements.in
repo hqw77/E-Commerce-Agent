@@ -23,3 +23,13 @@ structlog
 # Security
 argon2-cffi
 PyJWT>=2.15.0
+
+# RAG knowledge base
+qdrant-client
+sentence-transformers
+# CPU-only PyTorch keeps the Docker image from pulling CUDA/NVIDIA wheels.
+torch==2.15.0+cpu
+pypdf
+python-docx
+beautifulsoup4
+python-multipart

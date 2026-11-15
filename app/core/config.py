@@ -66,6 +66,24 @@ class Settings(BaseSettings):
     order_payment_timeout_minutes: int = Field(default=30, ge=1, le=1440)
     after_sales_window_hours: int = Field(default=168, ge=1, le=720)
 
+    # RAG / knowledge base
+    rag_enabled: bool = True
+    rag_qdrant_url: str = "http://127.0.0.1:6333"
+    rag_qdrant_api_key: SecretStr = SecretStr("")
+    rag_collection: str = "knowledge_chunks_bge_m3_v1"
+    rag_embedding_model: str = "BAAI/bge-m3"
+    rag_embedding_dimension: int = Field(default=1024, ge=1)
+    rag_embedding_device: str = "cpu"
+    rag_embedding_batch_size: int = Field(default=8, ge=1, le=128)
+    rag_embedding_cache_dir: str = ".cache/huggingface"
+    rag_top_k: int = Field(default=5, ge=1, le=50)
+    rag_max_candidates: int = Field(default=20, ge=1, le=200)
+    rag_chunk_target_tokens: int = Field(default=500, ge=50)
+    rag_chunk_max_tokens: int = Field(default=700, ge=50)
+    rag_chunk_overlap_tokens: int = Field(default=80, ge=0)
+    rag_max_file_size_mb: int = Field(default=20, ge=1, le=200)
+    rag_storage_dir: str = "storage/knowledge"
+
     # Alipay sandbox (empty means disabled)
     alipay_app_id: str = ""
     alipay_seller_id: str = ""

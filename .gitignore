@@ -25,6 +25,10 @@ htmlcov/
 # Tool caches
 .mypy_cache/
 .ruff_cache/
+.cache/
+
+# RAG local data
+storage/knowledge/
 
 # Logs
 *.log
