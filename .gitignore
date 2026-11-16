@@ -12,6 +12,7 @@ venv/
 .env.*
 
 !.env.example
+!.env.production.example
 
 # IDE
 .idea/
@@ -32,6 +33,9 @@ storage/knowledge/
 
 # Logs
 *.log
+
+# Local package archives
+*.zip
 
 # OS
 .DS_Store

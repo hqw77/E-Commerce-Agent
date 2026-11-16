@@ -89,8 +89,24 @@ docs/
 
 | 当前文件 | 当前状态 | 最终归属 |
 |---|---|---|
-| `docs/product-design.md` | 保留不动 | `docs/02-design/product-design.md` |
-| `docs/architecture.md` | 空文件，保留不动 | `docs/02-design/architecture.md` |
+| `docs/product-design.md` | TASK-003.1 设计，定稿待复核 | `docs/02-design/product-design.md` |
+| `docs/02-design/V1.2-项目总体规划.md` | V1.2 总体设计，待 Review | 保留在 `docs/02-design/` |
+| `docs/02-design/系统总体架构.md` | 系统总体架构，待 Review | 保留在 `docs/02-design/` |
+| `docs/02-design/AI-Agent-总体设计.md` | AI Agent 总体设计，待 Review | 保留在 `docs/02-design/` |
+| `docs/02-design/TASK-004.1-订单支付售后设计.md` | 设计冻结（第一版） | 保留在 `docs/02-design/` |
+| `docs/02-design/TASK-005-RAG-详细设计.md` | TASK-005 详细设计，已实现 | 保留在 `docs/02-design/` |
+| `docs/02-design/TASK-006-LangGraph-Agent-核心设计.md` | TASK-006 详细设计，已实现（待人工验收） | 保留在 `docs/02-design/` |
+| `docs/02-design/TASK-007-Agent-业务工具集成设计.md` | TASK-007 详细设计，已实现（待人工验收） | 保留在 `docs/02-design/` |
+| `docs/02-design/TASK-008-013-前端整体设计.md.md` | TASK-008～013 前端整体设计，已实现（待人工验收） | 保留在 `docs/02-design/` |
+| `docs/02-design/TASK-014-前后端联调设计.md` | TASK-014 前后端联调设计，已实现（待人工验收） | 保留在 `docs/02-design/` |
+| `docs/architecture.md` | AI Agent 安全设计基线（待 Review） | `docs/02-design/architecture.md` |
+| `docs/PROJECT-STATUS.md` | 项目总进度与下一任务记录 | 保留在根目录 |
+| `docs/03-delivery/TASK-004/` | TASK-004 交付和沙箱 E2E 清单 | 保留在 `docs/03-delivery/TASK-004/` |
+| `docs/03-delivery/TASK-005/` | TASK-005 RAG 交付记录 | 保留在 `docs/03-delivery/TASK-005/` |
+| `docs/03-delivery/TASK-008-013/` | TASK-008～013 前端交付报告 | 保留在 `docs/03-delivery/TASK-008-013/` |
+| `docs/03-delivery/TASK-014/` | TASK-014 联调验收报告和测试证据 | 保留在 `docs/03-delivery/TASK-014/` |
+| `docs/04-testing/TASK-015/` | TASK-015 测试计划、方案和评估结果 | 保留在 `docs/04-testing/TASK-015/` |
+| `docs/03-delivery/TASK-016/` | TASK-016 本地生产化验收报告 | 保留在 `docs/03-delivery/TASK-016/` |
 | `docs/database.md` | 空文件，保留不动 | `docs/04-knowledge/database.md` |
 | `docs/development.md` | 空文件，保留不动 | `docs/04-knowledge/development.md` |
 | `docs/learning-guide.md` | 保留在根目录 | `docs/learning-guide.md` |
@@ -122,8 +138,9 @@ docs/
 4. 不编造测试结果、Git 提交、代码位置和实际实现。
 5. 学习问答只收录真实提出的问题。
 6. 面试题从真实项目实现中提炼。
-7. TASK-004、RAG、Agent 当前只预留目录，不提前编写虚构教程。
-8. 现有文件暂不移动；待 TASK-001/002/003 教程放入后，再检查归档和引用关系。
+7. TASK-004 已完成业务代码与自动化验收；支付宝沙箱 E2E 延期至 TASK-015。
+8. TASK-005 RAG、TASK-006 Agent 核心、TASK-007 业务工具集成、TASK-008～013 React 前端代码实现与自动化验收完成，待人工验收。
+9. 现有文件暂不移动；待学习教程放入后，再检查归档和引用关系。
 
 ---
 
@@ -131,8 +148,14 @@ docs/
 
 ```text
 已完成：五大分类目录骨架、索引文件
+已完成：TASK-004 业务代码与自动化验收；支付宝沙箱 E2E 延期至 TASK-015
+已完成：TASK-005 RAG 代码实现与自动化验收，待人工验收
+已完成：TASK-006 LangGraph Agent 核心代码实现与自动化验收，待人工验收
+已完成：TASK-007 Agent 业务工具集成代码实现与自动化验收，待人工验收
+已完成：TASK-008～013 React 前端代码实现、构建与前端验收，待人工验收
+已完成：TASK-016 本地生产化 Docker Compose（真实支付/HTTPS 未验证）
+下一阶段：TASK-017 尚未开始
 未完成：现有文档迁移、教程归档、问答/决策/面试/交付内容
-当前重点：等待 TASK-001/002/003 学习教程放入 01-learning 对应目录
 ```
 
-当前不移动、不删除、不覆盖任何现有文档；不修改业务代码；不开始 TASK-004 或前端开发。
+当前不移动、不删除、不覆盖任何现有文档；不修改业务代码；不开始 TASK-005 编码。

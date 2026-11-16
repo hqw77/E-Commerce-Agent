@@ -1,0 +1,432 @@
+{
+  "version": "task015-rag-v1",
+  "documents": [
+    {
+      "title": "退款规则",
+      "file": "refund.md"
+    },
+    {
+      "title": "退货规则",
+      "file": "return.md"
+    },
+    {
+      "title": "换货规则",
+      "file": "exchange.md"
+    },
+    {
+      "title": "配送政策",
+      "file": "shipping.md"
+    },
+    {
+      "title": "商品使用说明",
+      "file": "product.md"
+    }
+  ],
+  "questions": [
+    {
+      "id": "refund-01",
+      "question": "订单还没发货，申请退款后多久到账？",
+      "expected_document": "退款规则",
+      "expected_keywords": [
+        "未发货",
+        "退款",
+        "到账"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "refund-02",
+      "question": "商品已经签收，退款申请期限是几天？",
+      "expected_document": "退款规则",
+      "expected_keywords": [
+        "签收",
+        "7 天",
+        "退款"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "refund-03",
+      "question": "哪些情况退款审核可能不通过？",
+      "expected_document": "退款规则",
+      "expected_keywords": [
+        "审核",
+        "已使用",
+        "拒绝"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "refund-04",
+      "question": "退款金额按什么计算，包含优惠券吗？",
+      "expected_document": "退款规则",
+      "expected_keywords": [
+        "退款金额",
+        "实付",
+        "优惠券"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "refund-05",
+      "question": "银行卡退款一般需要几个工作日？",
+      "expected_document": "退款规则",
+      "expected_keywords": [
+        "银行卡",
+        "7 个工作日",
+        "到账"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "return-01",
+      "question": "七天无理由退货需要满足什么条件？",
+      "expected_document": "退货规则",
+      "expected_keywords": [
+        "七天无理由",
+        "完好",
+        "二次销售"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "return-02",
+      "question": "商品有质量问题，退货运费由谁承担？",
+      "expected_document": "退货规则",
+      "expected_keywords": [
+        "质量问题",
+        "运费",
+        "商家"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "return-03",
+      "question": "退货时需要保留哪些商品配件？",
+      "expected_document": "退货规则",
+      "expected_keywords": [
+        "配件",
+        "包装",
+        "赠品"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "return-04",
+      "question": "退货申请通过后如何填写物流单号？",
+      "expected_document": "退货规则",
+      "expected_keywords": [
+        "退货",
+        "物流单号",
+        "验收"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "return-05",
+      "question": "超过七天期限还能申请退货吗？",
+      "expected_document": "退货规则",
+      "expected_keywords": [
+        "超过",
+        "退货期限",
+        "无法"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "exchange-01",
+      "question": "商品签收后换货期限是多久？",
+      "expected_document": "换货规则",
+      "expected_keywords": [
+        "签收",
+        "7 天",
+        "换货"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "exchange-02",
+      "question": "可以把商品换成不同款或不同价格的商品吗？",
+      "expected_document": "换货规则",
+      "expected_keywords": [
+        "同一 SKU",
+        "同款",
+        "不支持"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "exchange-03",
+      "question": "质量问题换货的物流费用由谁承担？",
+      "expected_document": "换货规则",
+      "expected_keywords": [
+        "质量问题",
+        "物流费用",
+        "商家"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "exchange-04",
+      "question": "换货时目标 SKU 没有库存怎么办？",
+      "expected_document": "换货规则",
+      "expected_keywords": [
+        "库存不足",
+        "退货退款",
+        "补货"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "exchange-05",
+      "question": "换货申请的完整流程是什么？",
+      "expected_document": "换货规则",
+      "expected_keywords": [
+        "换货申请",
+        "寄回",
+        "新商品"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "shipping-01",
+      "question": "平台默认使用哪家快递公司？",
+      "expected_document": "配送政策",
+      "expected_keywords": [
+        "默认",
+        "顺丰",
+        "快递"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "shipping-02",
+      "question": "现货商品付款后多久发货？",
+      "expected_document": "配送政策",
+      "expected_keywords": [
+        "48 小时",
+        "发货",
+        "现货"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "shipping-03",
+      "question": "订单满多少钱可以包邮？",
+      "expected_document": "配送政策",
+      "expected_keywords": [
+        "99 元",
+        "包邮",
+        "运费"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "shipping-04",
+      "question": "偏远地区和港澳台可以配送吗？",
+      "expected_document": "配送政策",
+      "expected_keywords": [
+        "偏远地区",
+        "港澳台",
+        "不支持"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "shipping-05",
+      "question": "发货后在哪里查看物流公司和运单号？",
+      "expected_document": "配送政策",
+      "expected_keywords": [
+        "订单详情",
+        "物流公司",
+        "运单号"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "product-01",
+      "question": "智能保温杯的容量和材质是什么？",
+      "expected_document": "商品使用说明",
+      "expected_keywords": [
+        "500 毫升",
+        "316 不锈钢",
+        "保温杯"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "product-02",
+      "question": "保温杯第一次使用前应该怎么清洗？",
+      "expected_document": "商品使用说明",
+      "expected_keywords": [
+        "首次使用",
+        "温水",
+        "清洗"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "product-03",
+      "question": "保温杯可以放进洗碗机清洗吗？",
+      "expected_document": "商品使用说明",
+      "expected_keywords": [
+        "洗碗机",
+        "不建议",
+        "手洗"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "product-04",
+      "question": "保温杯的质量保修期是多长时间？",
+      "expected_document": "商品使用说明",
+      "expected_keywords": [
+        "12 个月",
+        "保修",
+        "质量问题"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "product-05",
+      "question": "保温杯可以放进微波炉加热吗？",
+      "expected_document": "商品使用说明",
+      "expected_keywords": [
+        "微波炉",
+        "请勿",
+        "冷冻室"
+      ],
+      "answerable": true,
+      "expected_chunk_ids": [],
+      "visibility": "PUBLIC"
+    },
+    {
+      "id": "T15-RAG-NO-01",
+      "question": "今天杭州市的天气和温度是多少？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-02",
+      "question": "公司年会在哪一天举行？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-03",
+      "question": "如何申请退款到区块链钱包？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-04",
+      "question": "明天股票市场会涨吗？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-05",
+      "question": "火星基地什么时候开放？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-06",
+      "question": "订单支持使用狗狗币支付吗？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-07",
+      "question": "店铺是否提供二十四小时无人机配送？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    },
+    {
+      "id": "T15-RAG-NO-08",
+      "question": "会员积分的个人所得税税率是多少？",
+      "answerable": false,
+      "expected_document": null,
+      "expected_chunk_ids": [],
+      "expected_keywords": [],
+      "visibility": "PUBLIC",
+      "category": "no-answer"
+    }
+  ]
+}
