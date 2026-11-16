@@ -12,6 +12,7 @@ venv/
 .env.*
 
 !.env.example
+!.env.production.example
 
 # IDE
 .idea/
@@ -25,9 +26,16 @@ htmlcov/
 # Tool caches
 .mypy_cache/
 .ruff_cache/
+.cache/
+
+# RAG local data
+storage/knowledge/
 
 # Logs
 *.log
+
+# Local package archives
+*.zip
 
 # OS
 .DS_Store

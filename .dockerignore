@@ -21,9 +21,24 @@ env
 .pytest_cache
 .ruff_cache
 .mypy_cache
+.cache
+storage
 .coverage
 htmlcov
 tests
+backend/tests
+agent/tests
+
+# Frontend build inputs are required by frontend/Dockerfile.
+# Do not send node_modules, build output, tests or temporary artifacts.
+frontend/node_modules
+frontend/dist
+frontend/e2e
+frontend/test-results
+frontend/playwright-report
+frontend/.tmp
+frontend/.env
+frontend/.env.*
 
 # IDE
 .idea
