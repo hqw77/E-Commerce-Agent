@@ -104,6 +104,7 @@ async def update_product(
         product_id,
         request,
         description_provided="description" in request.model_fields_set,
+        image_url_provided="image_url" in request.model_fields_set,
     )
     return await service.get_product_detail(product_id)
 

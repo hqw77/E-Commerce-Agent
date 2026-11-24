@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -54,3 +54,12 @@ class UserResponse(BaseModel):
     email: EmailStr
 
     is_active: bool
+
+    is_admin: bool = False
+
+    @field_validator("is_admin", mode="before")
+    @classmethod
+    def normalize_is_admin(cls, value: object) -> bool:
+        # ORM objects that have not been flushed yet may expose None for this
+        # server-defaulted column; treat that as a normal user.
+        return bool(value)

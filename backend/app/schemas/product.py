@@ -18,6 +18,7 @@ class ProductCreateRequest(BaseModel):
     category_id: int = Field(ge=1)
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
+    image_url: str | None = Field(default=None, max_length=255)
     skus: list[SkuCreateRequest] = Field(default_factory=list)
 
     @field_validator("product_no", "name")
@@ -30,15 +31,39 @@ class ProductCreateRequest(BaseModel):
 
         return value
 
+    @field_validator("image_url")
+    @classmethod
+    def normalize_image_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+        return value or None
+
 
 class ProductUpdateRequest(BaseModel):
-    """Payload for updating product name, description or category."""
+    """Payload for updating product number, name, category or image."""
 
     model_config = ConfigDict(extra="forbid")
 
+    product_no: str | None = Field(default=None, min_length=3, max_length=32)
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
     category_id: int | None = Field(default=None, ge=1)
+    image_url: str | None = Field(default=None, max_length=255)
+
+    @field_validator("product_no")
+    @classmethod
+    def normalize_product_no(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+
+        if not value:
+            raise ValueError("Product number must not be empty")
+
+        return value
 
     @field_validator("name")
     @classmethod
@@ -53,6 +78,15 @@ class ProductUpdateRequest(BaseModel):
 
         return value
 
+    @field_validator("image_url")
+    @classmethod
+    def normalize_image_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+        return value or None
+
 
 class ProductResponse(BaseModel):
     """Product representation returned by the API."""
@@ -64,6 +98,7 @@ class ProductResponse(BaseModel):
     category_id: int
     name: str
     description: str | None
+    image_url: str | None
     status: str
     published_at: datetime | None
     archived_at: datetime | None

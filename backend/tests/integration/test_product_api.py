@@ -159,15 +159,19 @@ async def create_product(
     product_no: str | None = None,
     name: str = "Product",
     skus: list[dict] | None = None,
+    image_url: str | None = None,
 ) -> dict:
+    payload = {
+        "product_no": product_no or new_product_no(),
+        "category_id": category_id,
+        "name": name,
+        "skus": skus or [],
+    }
+    if image_url is not None:
+        payload["image_url"] = image_url
     response = await client.post(
         "/api/v1/admin/products",
-        json={
-            "product_no": product_no or new_product_no(),
-            "category_id": category_id,
-            "name": name,
-            "skus": skus or [],
-        },
+        json=payload,
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -229,7 +233,33 @@ async def test_create_product(api_client) -> None:
 
     assert product["status"] == "DRAFT"
     assert product["category_id"] == category["id"]
+    assert product["image_url"] is None
     assert product["skus"] == []
+
+
+@pytest.mark.asyncio
+async def test_product_image_and_number_can_be_updated(api_client) -> None:
+    category = await create_category(api_client)
+    product = await create_product(api_client, category["id"])
+    new_no = new_product_no()
+    image = "/products/05-smartphone.jpg"
+
+    response = await api_client.patch(
+        f"/api/v1/admin/products/{product['id']}",
+        json={"product_no": new_no, "image_url": image},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["product_no"] == new_no
+    assert body["image_url"] == image
+
+    clear = await api_client.patch(
+        f"/api/v1/admin/products/{product['id']}",
+        json={"image_url": None},
+    )
+    assert clear.status_code == 200
+    assert clear.json()["image_url"] is None
 
 
 @pytest.mark.asyncio

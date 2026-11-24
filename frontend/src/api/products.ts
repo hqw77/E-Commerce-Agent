@@ -1,8 +1,6 @@
 import { api } from './client';
 import type {
   Category,
-  CategoryCreateRequest,
-  CategoryUpdateRequest,
   ProductCreateRequest,
   ProductDetail,
   ProductListResponse,
@@ -68,18 +66,5 @@ export async function updateSku(
 
 export async function listCategories(): Promise<Category[]> {
   const response = await api.get<Category[]>('/admin/categories');
-  return response.data;
-}
-
-export async function createCategory(payload: CategoryCreateRequest): Promise<Category> {
-  const response = await api.post<Category>('/admin/categories', payload);
-  return response.data;
-}
-
-export async function updateCategory(
-  categoryId: number,
-  payload: CategoryUpdateRequest,
-): Promise<Category> {
-  const response = await api.patch<Category>(`/admin/categories/${categoryId}`, payload);
   return response.data;
 }

@@ -24,7 +24,7 @@ export function readFixture(): E2EFixture | null {
 
 export async function login(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/login');
-  await page.getByPlaceholder('admin@example.com').fill(email);
+  await page.getByLabel('邮箱').fill(email);
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
   await page.waitForURL('**/dashboard');

@@ -9,33 +9,15 @@ test.describe('admin core pages', () => {
     await login(page, fixture.admin.email, fixture.admin.password);
   });
 
-  test('category and product pages display seeded data', async ({ page }) => {
+  test('product page displays seeded data and category management is absent', async ({ page }) => {
     const fixture = readFixture();
     if (!fixture) return;
 
-    await page.goto('/categories');
-    await expect(page.getByRole('heading', { name: '分类管理' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: fixture.category.name })).toBeVisible();
-
-    await page.getByRole('button', { name: /编\s*辑/ }).first().click();
-    const editDialog = page.getByRole('dialog');
-    await expect(editDialog).toBeVisible();
-    const categoryName = editDialog.locator('input').first();
-    await categoryName.fill(`${fixture.category.name}-edited`);
-    await editDialog.getByRole('button', { name: /确\s*定/ }).click();
-    await expect(page.getByText('分类已更新')).toBeVisible();
-
-    const uiCategory = `TASK015-UI-${fixture.run_id}`;
-    await page.getByRole('button', { name: /新\s*增\s*分\s*类/ }).click();
-    const createDialog = page.getByRole('dialog');
-    await expect(createDialog).toBeVisible();
-    await createDialog.locator('input').first().fill(uiCategory);
-    await createDialog.getByRole('button', { name: /确\s*定/ }).click();
-    await expect(page.getByText('分类已创建')).toBeVisible();
-    await expect(page.getByRole('cell', { name: uiCategory })).toBeVisible();
-
     await page.goto('/products');
     await expect(page.getByRole('heading', { name: '商品管理' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '分类管理' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '知识库' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Agent Trace' })).toHaveCount(0);
     await page.getByRole('link', { name: fixture.product.product_no }).click();
     await expect(page.getByText(fixture.product.product_no).first()).toBeVisible();
     await expect(page.getByText(fixture.sku.sku_code).first()).toBeVisible();

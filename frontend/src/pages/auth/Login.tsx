@@ -1,7 +1,7 @@
 import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Input, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../../layouts/AuthLayout';
 import { useAuthStore, login } from '../../stores/authStore';
 
@@ -12,19 +12,21 @@ interface LoginValues {
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { status, error } = useAuthStore();
+  const { status, error, user } = useAuthStore();
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm<LoginValues>();
 
   useEffect(() => {
-    if (status === 'authenticated') navigate('/dashboard', { replace: true });
-  }, [navigate, status]);
+    if (status === 'authenticated') {
+      navigate(user?.is_admin ? '/dashboard' : '/shop', { replace: true });
+    }
+  }, [navigate, status, user]);
 
   async function handleSubmit(values: LoginValues) {
     setSubmitting(true);
     try {
-      await login(values);
-      navigate('/dashboard', { replace: true });
+      const authenticatedUser = await login(values);
+      navigate(authenticatedUser.is_admin ? '/dashboard' : '/shop', { replace: true });
     } catch {
       // The auth store exposes the normalized error above the form.
     } finally {
@@ -34,9 +36,9 @@ export function LoginPage() {
 
   return (
     <AuthLayout>
-      <Typography.Title level={3}>登录管理后台</Typography.Title>
+      <Typography.Title level={3}>登录运营后台</Typography.Title>
       <Typography.Paragraph type="secondary">
-        使用后端账号登录，身份与权限由 FastAPI 最终校验。
+        使用员工账号登录，管理商品、库存、订单与售后。
       </Typography.Paragraph>
       {error ? <Alert type="error" showIcon message={error} className="form-alert" /> : null}
       <Form form={form} layout="vertical" onFinish={handleSubmit} requiredMark={false}>
@@ -45,7 +47,7 @@ export function LoginPage() {
           label="邮箱"
           rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}
         >
-          <Input prefix={<MailOutlined />} autoComplete="email" placeholder="admin@example.com" />
+          <Input prefix={<MailOutlined />} autoComplete="email" placeholder="name@qingfeng.com" />
         </Form.Item>
         <Form.Item
           name="password"
@@ -59,7 +61,10 @@ export function LoginPage() {
         </Button>
       </Form>
       <Typography.Paragraph className="auth-switch">
-        还没有账号？<Link to="/register">注册</Link>
+        <Typography.Text type="secondary">内部账号由管理员开通</Typography.Text>
+      </Typography.Paragraph>
+      <Typography.Paragraph type="secondary" style={{ textAlign: 'center', fontSize: 12, marginBottom: 0 }}>
+        演示双端：普通窗口登录管理员，无痕窗口登录普通用户。
       </Typography.Paragraph>
     </AuthLayout>
   );

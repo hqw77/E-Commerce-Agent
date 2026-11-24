@@ -55,13 +55,14 @@ export async function bootstrapAuth(): Promise<void> {
   }
 }
 
-export async function login(payload: LoginRequest): Promise<void> {
+export async function login(payload: LoginRequest): Promise<User> {
   emit({ ...snapshot, status: 'loading', error: null });
   try {
     const tokens = await authApi.login(payload);
     saveTokens(tokens.access_token, tokens.refresh_token);
     const user = await authApi.me();
     emit({ status: 'authenticated', user, error: null });
+    return user;
   } catch (error) {
     clearTokens();
     emit({

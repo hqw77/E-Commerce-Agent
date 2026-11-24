@@ -1,73 +1,353 @@
-# E-Commerce Agent
+# 清风数码 · E-Commerce Agent
 
-本地全栈电商 AI Agent 项目。目标是把真实电商业务与 LangGraph、RAG、Tool Calling、Prepare/Confirm 和 Trace/Safety 结合起来, 形成可运行、可测试、可解释的工程实践项目。
+一个本地可运行的双端电商智能体项目：
 
-> 这是本地开发/求职作品项目, 不是已上线生产系统。  
-> 不包含云部署、域名、HTTPS 和生产备份恢复。
+```text
+消费者商城 + AI 导购/客服 + 运营管理后台
+```
 
-## 项目能力
+项目重点不是做一个完整商业电商平台，而是验证：
 
-- 认证、JWT Access/Refresh、退出;
-- 分类、商品、SKU;
-- 库存查询、入库、调整、流水;
-- 订单创建、取消、发货、送达、完成;
-- 简化售后: EXCHANGE 换货;
-- 知识库上传、解析、Chunk、BGE-M3、Qdrant、发布、检索;
-- Agent GENERAL/RAG/TOOL/WORKFLOW/UNSUPPORTED;
-- READ Tool、PREPARE Tool、独立 Confirm;
-- RAG ACL、Source 服务端构造、无答案策略;
-- Safety、Trace、Debug API。
+- 真实商品、SKU、库存、订单、售后如何建模；
+- LangGraph Agent 如何安全调用真实业务能力；
+- 高风险操作如何通过 Prepare / Confirm 受控执行；
+- RAG 如何做到 ACL、Chunk 回查和可解释的拒答；
+- 消费者端和运营端如何在同一套后端之上分工。
+
+> 本项目是本地开发/求职演示项目，不是生产系统。
+> 不包含真实支付、购物车、云部署、HTTPS 和正式运维体系。
+
+---
+
+## 功能总览
+
+### 消费者商城
+
+| 功能 | 状态 |
+|---|---|
+| 商品浏览、分类、搜索 | 已完成 |
+| 商品详情、SKU、库存 | 已完成 |
+| 立即购买 | 已完成 |
+| 我的订单、订单详情 | 已完成 |
+| 取消未发货订单 | 已完成 |
+| 我的售后、售后详情 | 已完成 |
+| 申请换货 | 已完成 |
+| 填写退货物流 | 已完成 |
+| AI 导购/客服 | 已完成 |
+| 购物车 | 未实现 |
+| 支付/结算 | 未实现 |
+
+### 运营后台
+
+| 功能 | 状态 |
+|---|---|
+| 商品管理、图片、SKU | 已完成 |
+| 库存初始化、入库、调整、流水 | 已完成 |
+| 订单发货、送达、完成 | 已完成 |
+| 售后审核、拒绝、收货、完成换货 | 已完成 |
+| 知识库管理 | 已完成 |
+| AI 助手 | 已完成 |
+| Agent Trace | 已完成 |
+| 分类管理独立页面 | 已移除，分类数据保留 |
+| 购物车/支付管理 | 不在范围 |
+
+### 角色
+
+```text
+游客      浏览商城、查看商品
+普通用户  商城、立即购买、我的订单、我的售后、AI 导购
+管理员    运营后台，也可以进入商城
+```
+
+只有一个登录页，登录后按后端返回的 `is_admin` 自动跳转：
+
+```text
+普通用户 → /shop
+管理员   → /dashboard
+```
+
+---
+
+## 项目地址
+
+本地默认运行地址：
+
+```text
+商城       http://127.0.0.1:5173/shop
+登录       http://127.0.0.1:5173/login
+运营后台    http://127.0.0.1:5173/dashboard
+后端 API   http://127.0.0.1:8000/api/v1
+Swagger    http://127.0.0.1:8000/docs
+```
+
+---
 
 ## 技术栈
 
 ```text
-Backend:  Python 3.12, FastAPI, Pydantic v2, 异步 SQLAlchemy
-Data:     MySQL 8, Redis 7, Qdrant
-Agent:    LangGraph, LangChain Core/ChatOpenAI, BGE-M3
-Frontend: React 18, TypeScript, Vite, Ant Design
-Quality:  Pytest, Vitest, Playwright, Ruff, Mypy, Alembic
+后端       Python 3.12, FastAPI, Pydantic v2, 异步 SQLAlchemy
+数据库     MySQL 8, Redis 7, Qdrant
+Agent      LangGraph, LangChain Core, langchain-openai, DeepSeek
+RAG        BAAI/bge-m3, sentence-transformers, Qdrant
+认证       Argon2id, PyJWT, Access/Refresh Token
+前端       React 18, TypeScript, Vite, Ant Design, TanStack Query
+测试       Pytest, Vitest, Playwright
+工程       Alembic, Ruff, Mypy, Docker Compose
 ```
 
-## 架构
+---
+
+## 整体架构
+
+```mermaid
+flowchart TB
+    U[消费者 / 管理员] --> FE[React 前端]
+    FE --> API[FastAPI /api/v1]
+
+    API --> AUTH[认证]
+    API --> SHOP[消费者商城 API]
+    API --> ADMIN[运营后台 API]
+    API --> AGENT[Agent API]
+
+    SHOP --> SVC[业务 Service]
+    ADMIN --> SVC
+    AUTH --> SVC
+
+    SVC --> REPO[Repository]
+    REPO --> MYSQL[(MySQL)]
+
+    AGENT --> RUNTIME[AgentRuntime]
+    RUNTIME --> GRAPH[LangGraph]
+    GRAPH --> RAG[RAG 检索]
+    GRAPH --> TOOL[READ / PREPARE Tools]
+    GRAPH --> CONFIRM[Redis Confirm]
+
+    RAG --> QDRANT[(Qdrant)]
+    RAG --> MYSQL
+    TOOL --> SVC
+    CONFIRM --> REDIS[(Redis)]
+    GRAPH --> TRACE[Trace Buffer]
+```
+
+核心边界：
+
+- Agent 不直接访问数据库；
+- LLM 不决定权限；
+- READ Tool 只读；
+- PREPARE 只写 Redis pending；
+- 真正执行走独立 Confirm API；
+- RAG 先做 ACL 和版本过滤；
+- MySQL 是 Chunk、权限和版本权威源；
+- Source 由后端构造，不信任模型输出。
+
+---
+
+## 核心业务流程
 
 ```text
-React
-→ FastAPI /api/v1
-→ AgentRuntime
-→ LangGraph
-→ RAG / READ Tool / PREPARE Workflow
-→ Backend Service
-→ MySQL / Redis / Qdrant
+普通用户浏览商城
+→ 商品详情
+→ 立即购买
+→ 生成 CREATED 订单
+→ 管理员发货
+→ 管理员标记送达
+→ 普通用户申请换货
+→ 管理员审核通过
+→ 普通用户填写退货物流
+→ 管理员确认收货
+→ 管理员完成换货补发
+→ 售后 COMPLETED
 ```
 
-核心安全约束:
+订单取消：
 
-- Agent 不直接访问数据库;
-- LLM 不能决定权限;
-- PREPARE 只生成 Redis pending, 真正执行走独立 Confirm API;
-- ACL 在 RAG 检索前过滤;
-- Source 由服务端构造;
-- RAG 内容属于 untrusted content。
+```text
+普通用户取消未发货订单
+→ 订单 CANCELLED
+→ 库存预占释放
+```
 
-## 文档
+订单状态：
 
-完整文档入口: [docs/README.md](docs/README.md)
+```text
+CREATED → CANCELLED
+CREATED → SHIPPED → DELIVERED → COMPLETED
+```
 
-- [项目总览](docs/00-project-overview/README.md)
-- [前端](docs/01-frontend/README.md)
-- [后端](docs/02-backend/README.md)
-- [Agent](docs/03-agent/README.md)
-- [公共环境](docs/04-common/README.md)
-- [集成契约](docs/05-integration/README.md)
-- [测试与验收](docs/06-testing/README.md)
-- [项目管理](docs/07-project-management/README.md)
-- [架构决策](docs/08-architecture-decisions/README.md)
-- [历史归档](docs/09-archive/README.md)
-- [学习资料](docs/10-learning/README.md)
+售后类型：
+
+```text
+EXCHANGE
+```
+
+支付和资金退款已从当前运行时移除。
+
+---
+
+## Agent 执行流程
+
+```text
+POST /api/v1/agent/chat
+→ AgentRuntime
+→ Safety / Rate Limit / Conversation Lock
+→ LangGraph StateGraph
+→ classify_intent
+→ GENERAL / RAG / TOOL / WORKFLOW / UNSUPPORTED
+→ 业务查询或 Prepare
+→ validate_output
+→ save_conversation
+```
+
+当前工具：
+
+```text
+READ:
+  search_products
+  get_product_detail
+  get_sku_detail
+  check_sku_inventory
+  list_my_orders
+  get_my_order
+  list_my_after_sales
+  get_my_after_sales
+
+PREPARE:
+  prepare_cancel_order
+  prepare_create_after_sales
+```
+
+Prepare / Confirm：
+
+```text
+PREPARE Tool
+→ Redis pending
+→ 前端展示确认卡片
+→ POST /agent/actions/{id}/confirm
+→ nonce / user / conversation / params hash 校验
+→ Lua 原子消费
+→ 调用订单或售后 Service
+```
+
+---
+
+## RAG 流程
+
+```text
+上传文档
+→ 文档解析 PDF/DOCX/Markdown/HTML/TXT
+→ 清洗
+→ 结构感知 Chunk
+→ BGE-M3 Embedding
+→ MySQL Chunk + Qdrant Vector
+→ 发布版本
+→ 检索
+```
+
+检索边界：
+
+```text
+MySQL 允许版本 ACL
+→ Qdrant 限定 version_id 检索
+→ 用 chunk_id 回查 MySQL
+→ 丢弃 stale point
+→ 构造 Source
+→ Agent 无答案判断
+```
+
+当前无答案阈值：
+
+```text
+top_score < 0.60 → LOW_SCORE
+0.60 <= score < 0.625 且 evidence coverage < 0.50 → LOW_EVIDENCE
+其他 → ACCEPTED
+```
+
+---
+
+## 项目结构
+
+```text
+backend/
+  app/
+    api/             API 路由
+    core/            配置、安全、异常、日志
+    db/              MySQL / Redis
+    infrastructure/  Qdrant、文件存储
+    models/          ORM 模型
+    repositories/    SQL 查询
+    schemas/         Pydantic Schema
+    services/        业务逻辑
+  alembic/           数据库迁移
+  tests/             后端测试
+
+agent/
+  graph.py           LangGraph
+  state.py           AgentState
+  context.py         RuntimeContext
+  runtime.py         AgentRuntime
+  tools/             READ/ PREPARE/ Confirm
+  safety/            Guardrail
+  observability/     Trace
+
+frontend/
+  src/
+    api/
+    components/
+    layouts/         AdminLayout / ShopLayout
+    pages/
+      shop/          消费者商城
+      products/
+      inventory/
+      orders/
+      after-sales/
+      agent/
+      knowledge/
+    router/          ProtectedRoute / AdminRoute
+    stores/          Auth Store
+    types/
+
+docs/                项目文档和历史交付报告
+```
+
+---
 
 ## 本地启动
 
-开发数据默认使用 MySQL 3307, Redis 6380, Qdrant 6333。
+### 1. 准备环境变量
+
+```powershell
+Copy-Item .env.example .env
+```
+
+本机通过 Docker 映射的端口是：
+
+```text
+MySQL   127.0.0.1:3307
+Redis   127.0.0.1:6380
+Qdrant  127.0.0.1:6333
+```
+
+`.env` 至少需要配置：
+
+```dotenv
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3307
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6380
+RAG_QDRANT_URL=http://127.0.0.1:6333
+DEEPSEEK_API_KEY=你的 Key
+JWT_SECRET_KEY=至少 32 字节随机值
+```
+
+不要把真实 `.env` 提交到 Git。
+
+### 2. 启动基础设施
+
+```powershell
+docker compose up -d mysql redis qdrant
+```
+
+### 3. 后端
 
 ```powershell
 $env:PYTHONPATH="$PWD\backend;$PWD"
@@ -76,23 +356,55 @@ $env:MYSQL_PORT="3307"
 $env:REDIS_HOST="127.0.0.1"
 $env:REDIS_PORT="6380"
 $env:RAG_QDRANT_URL="http://127.0.0.1:6333"
+
+.venv\Scripts\alembic.exe -c backend\alembic.ini upgrade head
 .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
+### 4. 前端
+
 ```powershell
 cd frontend
+npm install
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-健康检查:
+### 5. 创建管理员
 
-```text
-http://127.0.0.1:8000/api/v1/health/live
-http://127.0.0.1:8000/api/v1/health/ready
-http://127.0.0.1:5173/
+先通过 `/register` 注册普通用户，再在本地 MySQL 中提升为管理员：
+
+```sql
+UPDATE users SET is_admin = 1 WHERE email = 'your-admin@example.com';
 ```
 
+重新登录后进入 `/dashboard`。
+
+---
+
+## 演示账号与会话
+
+项目演示建议使用两个浏览器上下文：
+
+```text
+普通窗口：管理员
+无痕窗口：普通用户
+```
+
+原因：当前 Token 存在 `localStorage`，同一普通浏览器同一 Origin 下的标签页共享登录状态。无痕窗口有独立存储，因此可以同时保留两种身份。
+
+普通用户可以通过商城右上角：
+
+```text
+登录 / 注册
+```
+
+注册后默认是普通用户。
+
+---
+
 ## 测试
+
+### 后端
 
 ```powershell
 .venv\Scripts\ruff.exe check backend/app agent
@@ -101,35 +413,115 @@ http://127.0.0.1:5173/
 .venv\Scripts\python.exe -m pytest -q
 ```
 
+当前基线：
+
+```text
+Backend/Agent pytest: 361 passed
+```
+
+### 前端
+
 ```powershell
 cd frontend
 npm run typecheck
 npm run lint
 npm test
 npm run build
+```
+
+当前基线：
+
+```text
+TypeScript: 通过
+ESLint: 通过
+Vite build: 通过
+Vitest: 6 passed
+```
+
+Playwright 测试：
+
+```powershell
 npm run e2e
 ```
 
-## 当前状态
+部分 E2E 依赖 `frontend/.tmp/task014-e2e.json` fixture；先运行：
 
-- TASK-001～016: 本地业务完成;
-- TASK-019/020/020.A: Agent 架构与 E2E 完成;
-- TASK-021.0/021.1: 完成;
-- TASK-021.2: 代码和自动化完成, 待人工最终验收;
-- TASK-023-FINAL.2: 支付/退款下线, 订单和售后收敛完成;
-- TASK-017/018: 暂缓;
-- TASK-021.3/022: 未开始/范围待定义。
+```powershell
+$env:PYTHONPATH="$PWD\backend;$PWD"
+.venv\Scripts\python.exe backend/scripts/task014_e2e_seed.py
+```
 
-## 已知限制
+---
 
-- 支付和资金退款已从当前正式功能中移除;
-- 历史 payments/refunds 表和支付字段保留, 但运行时不再写入;
-- HITL 未实现;
-- Trace 是进程内 Buffer, 不是审计存储;
-- RAG 评测样本小, 无答案阈值不是生产认证;
-- 当前知识库规模小;
-- 3306 是空库, 本地演示使用 3307。
+## API 概览
 
-## 许可/用途
+```text
+/api/v1/auth/*              认证
+/api/v1/catalog/*           公开商品目录
+/api/v1/orders/*            普通用户订单
+/api/v1/orders/*/after-sales 用户售后
+/api/v1/after-sales/*       用户售后详情
+/api/v1/agent/*             Agent 聊天/确认/Trace
+/api/v1/admin/products     商品管理
+/api/v1/admin/inventory    库存管理
+/api/v1/admin/orders       订单履约
+/api/v1/admin/after-sales  售后审核
+/api/v1/knowledge/*        知识库
+```
 
-用于本地学习、面试演示和工程实践, 不作为生产系统交付。
+Swagger：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## 当前限制
+
+### 产品范围
+
+```text
+购物车未实现
+支付/结算未实现
+普通用户地址簿未实现
+优惠券、会员、多商家未实现
+```
+
+### 工程范围
+
+```text
+没有云部署、HTTPS、域名拆分
+没有 CI/CD 和生产监控
+Trace 是进程内 Buffer，不是持久化审计
+RAG 评测是小样本，无答案阈值不是生产认证
+新订单编号由 OrderService 生成，格式与早期演示订单不同
+```
+
+### 已知行为
+
+```text
+普通用户只有在订单 DELIVERED / COMPLETED 后才会看到“申请换货”
+同一普通浏览器同一 Origin 只能保留一个登录身份
+```
+
+---
+
+## 文档
+
+- [项目文档索引](docs/README.md)
+- [项目总览](docs/00-project-overview/README.md)
+- [前端](docs/01-frontend/README.md)
+- [后端](docs/02-backend/README.md)
+- [Agent](docs/03-agent/README.md)
+- [集成契约](docs/05-integration/README.md)
+- [测试与验收](docs/06-testing/README.md)
+- [架构决策](docs/08-architecture-decisions/README.md)
+- [商品管理优化报告](docs/03-delivery/TASK-024-商品管理优化报告.md)
+
+---
+
+## 用途
+
+用于本地学习、面试演示和工程实践。
+不包含真实支付能力，不作为生产系统交付。

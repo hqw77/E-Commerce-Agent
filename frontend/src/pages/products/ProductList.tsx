@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Form,
+  Image,
   Input,
   Modal,
   Select,
@@ -27,7 +28,10 @@ interface ProductFormValues {
   category_id: number;
   name: string;
   description?: string;
+  image_url?: string;
 }
+
+const PRODUCT_PLACEHOLDER = '/products/placeholder.svg';
 
 export function ProductListPage() {
   const { message } = App.useApp();
@@ -66,6 +70,24 @@ export function ProductListPage() {
   });
 
   const columns: ColumnsType<Product> = [
+    {
+      title: '图片',
+      dataIndex: 'image_url',
+      width: 84,
+      render: (value: string | null, record) => (
+        <Link to={`/products/${record.id}`}>
+          <Image
+            src={value || PRODUCT_PLACEHOLDER}
+            fallback={PRODUCT_PLACEHOLDER}
+            alt={record.name}
+            width={56}
+            height={56}
+            preview={false}
+            style={{ objectFit: 'cover', borderRadius: 8 }}
+          />
+        </Link>
+      ),
+    },
     {
       title: '商品编号',
       dataIndex: 'product_no',
@@ -193,6 +215,9 @@ export function ProductListPage() {
           </Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="image_url" label="商品图片路径">
+            <Input placeholder="例如 /products/05-smartphone.jpg" />
           </Form.Item>
           <Typography.Text type="secondary">
             创建后可在详情页补充 SKU；分类与商品规则由后端校验。

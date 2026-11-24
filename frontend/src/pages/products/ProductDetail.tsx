@@ -7,6 +7,7 @@ import {
   Card,
   Descriptions,
   Form,
+  Image,
   Input,
   InputNumber,
   Modal,
@@ -37,6 +38,8 @@ interface SkuFormValues {
   attributes: Array<{ key: string; value: string }>;
 }
 
+const PRODUCT_PLACEHOLDER = '/products/placeholder.svg';
+
 export function ProductDetailPage() {
   const { message } = App.useApp();
   const { productId } = useParams();
@@ -46,7 +49,12 @@ export function ProductDetailPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingSku, setEditingSku] = useState<SkuDetail | null>(null);
   const [productEditOpen, setProductEditOpen] = useState(false);
-  const [productForm] = Form.useForm<{ name: string; description?: string; category_id: number }>();
+  const [productForm] = Form.useForm<{
+    name: string;
+    description?: string;
+    category_id: number;
+    image_url?: string;
+  }>();
   const categories = useQuery({ queryKey: ['categories'], queryFn: listCategories });
   const [skuForm] = Form.useForm<SkuFormValues>();
   const [editForm] = Form.useForm<{ price: number; status: 'ACTIVE' | 'INACTIVE' }>();
@@ -83,8 +91,12 @@ export function ProductDetailPage() {
     onError: (error) => message.error(errorMessage(error)),
   });
   const updateProductMutation = useMutation({
-    mutationFn: (values: { name: string; description?: string; category_id: number }) =>
-      updateProduct(id, values),
+    mutationFn: (values: {
+      name: string;
+      description?: string;
+      category_id: number;
+      image_url?: string;
+    }) => updateProduct(id, values),
     onSuccess: async () => {
       message.success('商品资料已更新');
       setProductEditOpen(false);
@@ -145,19 +157,29 @@ export function ProductDetailPage() {
         }
       />
       <Card className="soft-card" title="商品信息">
-        <Descriptions column={2} bordered size="middle">
-          <Descriptions.Item label="商品编号">{product.product_no}</Descriptions.Item>
-          <Descriptions.Item label="状态">
-            <StatusTag status={product.status} />
-          </Descriptions.Item>
-          <Descriptions.Item label="名称">{product.name}</Descriptions.Item>
-          <Descriptions.Item label="分类 ID">{product.category_id}</Descriptions.Item>
-          <Descriptions.Item label="描述" span={2}>
-            {product.description || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="创建时间">{formatDate(product.created_at)}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{formatDate(product.updated_at)}</Descriptions.Item>
-        </Descriptions>
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', marginBottom: 16 }}>
+          <Image
+            src={product.image_url || PRODUCT_PLACEHOLDER}
+            fallback={PRODUCT_PLACEHOLDER}
+            alt={product.name}
+            width={240}
+            height={240}
+            style={{ objectFit: 'cover', borderRadius: 12, flex: '0 0 auto' }}
+          />
+          <Descriptions column={1} bordered size="middle" style={{ flex: 1 }}>
+            <Descriptions.Item label="商品编号">{product.product_no}</Descriptions.Item>
+            <Descriptions.Item label="状态">
+              <StatusTag status={product.status} />
+            </Descriptions.Item>
+            <Descriptions.Item label="名称">{product.name}</Descriptions.Item>
+            <Descriptions.Item label="分类 ID">{product.category_id}</Descriptions.Item>
+            <Descriptions.Item label="描述">
+              {product.description || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="创建时间">{formatDate(product.created_at)}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">{formatDate(product.updated_at)}</Descriptions.Item>
+          </Descriptions>
+        </div>
         <div className="inline-actions">
           <Button
             onClick={() => {
@@ -165,6 +187,7 @@ export function ProductDetailPage() {
                 name: product.name,
                 description: product.description ?? undefined,
                 category_id: product.category_id,
+                image_url: product.image_url ?? undefined,
               });
               setProductEditOpen(true);
             }}
@@ -344,6 +367,9 @@ export function ProductDetailPage() {
           </Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="image_url" label="商品图片路径">
+            <Input placeholder="例如 /products/05-smartphone.jpg" />
           </Form.Item>
         </Form>
       </Modal>

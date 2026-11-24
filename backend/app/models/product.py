@@ -91,6 +91,12 @@ class Product(Base):
         nullable=True,
     )
 
+    # 本地商品图相对路径, 例如 /products/05-smartphone.jpg; 不存二进制.
+    image_url: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     # DRAFT/ACTIVE/INACTIVE/ARCHIVED 与时间字段由数据库约束联合保证.
     status: Mapped[str] = mapped_column(
         String(16),

@@ -39,12 +39,14 @@ class ProductRepository:
         category_id: int,
         name: str,
         description: str | None,
+        image_url: str | None = None,
     ) -> Product:
         product = Product(
             product_no=product_no,
             category_id=category_id,
             name=name,
             description=description,
+            image_url=image_url,
             status="DRAFT",
         )
         self.session.add(product)

@@ -100,6 +100,31 @@ async def list_order_after_sales(
 
 
 @router.get(
+    "",
+    response_model=AfterSaleListResponse,
+    summary="List my after-sales requests",
+)
+async def list_my_after_sales(
+    session: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> AfterSaleListResponse:
+    service = AfterSaleService(session)
+    items, total = await service.list_for_user(
+        user_id=user.id,
+        page=page,
+        page_size=page_size,
+    )
+    return AfterSaleListResponse(
+        items=[await _response(session, item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get(
     "/{after_sales_no}",
     response_model=AfterSaleResponse,
     summary="Get my after-sales request",

@@ -1,5 +1,4 @@
 import {
-  ApartmentOutlined,
   AppstoreOutlined,
   BarcodeOutlined,
   BugOutlined,
@@ -21,18 +20,16 @@ import { logout, useAuthStore } from '../stores/authStore';
 const items = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: <Link to="/dashboard">首页概览</Link> },
   { key: '/products', icon: <AppstoreOutlined />, label: <Link to="/products">商品管理</Link> },
-  { key: '/categories', icon: <ApartmentOutlined />, label: <Link to="/categories">分类管理</Link> },
   { key: '/inventory', icon: <TagsOutlined />, label: <Link to="/inventory">库存管理</Link> },
   { key: '/orders', icon: <ShoppingCartOutlined />, label: <Link to="/orders">订单管理</Link> },
   { key: '/after-sales', icon: <ProfileOutlined />, label: <Link to="/after-sales">售后管理</Link> },
   { key: '/knowledge', icon: <FileTextOutlined />, label: <Link to="/knowledge">知识库</Link> },
-  { key: '/agent', icon: <MessageOutlined />, label: <Link to="/agent">AI Agent</Link> },
+  { key: '/agent', icon: <MessageOutlined />, label: <Link to="/agent">AI 助手</Link> },
   { key: '/agent/debug', icon: <BugOutlined />, label: <Link to="/agent/debug">Agent Trace</Link> },
 ];
 
 function selectedKey(pathname: string): string {
   if (pathname.startsWith('/inventory')) return '/inventory';
-  if (pathname.startsWith('/categories')) return '/categories';
   if (pathname.startsWith('/products')) return '/products';
   if (pathname.startsWith('/orders')) return '/orders';
   if (pathname.startsWith('/after-sales')) return '/after-sales';
@@ -49,7 +46,7 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
   const breadcrumb = useMemo(() => {
     const item = items.find((entry) => entry.key === selected);
     return [
-      { title: <Link to="/dashboard">E-Commerce Agent</Link> },
+      { title: <Link to="/dashboard">清风数码</Link> },
       { title: item ? item.label : '工作台' },
     ];
   }, [selected]);
@@ -59,7 +56,10 @@ export function AdminLayout({ children }: { children?: ReactNode }) {
       <Layout.Sider width={232} className="admin-sider" breakpoint="lg" collapsedWidth={0}>
         <div className="sider-brand">
           <BarcodeOutlined />
-          <span>E-Commerce Agent</span>
+          <div className="sider-brand-text">
+            <span>清风数码</span>
+            <small>运营后台</small>
+          </div>
         </div>
         <Menu theme="dark" mode="inline" selectedKeys={[selected]} items={items} />
       </Layout.Sider>

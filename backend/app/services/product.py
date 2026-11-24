@@ -109,6 +109,7 @@ class ProductService:
                     category_id=request.category_id,
                     name=request.name,
                     description=request.description,
+                    image_url=request.image_url,
                 )
             except IntegrityError as exc:
                 if self._is_product_no_conflict(exc):
@@ -217,6 +218,7 @@ class ProductService:
         request: ProductUpdateRequest,
         *,
         description_provided: bool = False,
+        image_url_provided: bool = False,
     ) -> Product:
         async with transaction_context(self.session):
             snapshot = await self.repository.get_by_id(product_id)
@@ -313,10 +315,29 @@ class ProductService:
 
             if request.name is not None:
                 product.name = request.name
+            if request.product_no is not None and request.product_no != product.product_no:
+                self._validate_product_no(request.product_no)
+                existing = await self.repository.get_by_product_no(request.product_no)
+                if existing is not None and existing.id != product.id:
+                    raise ConflictException(
+                        message="Product number already exists",
+                        code="PRODUCT_NO_CONFLICT",
+                    )
+                product.product_no = request.product_no
             if description_provided:
                 product.description = request.description
+            if image_url_provided:
+                product.image_url = request.image_url
 
-            return await self.repository.save(product)
+            try:
+                return await self.repository.save(product)
+            except IntegrityError as exc:
+                if self._is_product_no_conflict(exc):
+                    raise ConflictException(
+                        message="Product number already exists",
+                        code="PRODUCT_NO_CONFLICT",
+                    ) from exc
+                raise
 
     async def activate_product(self, product_id: int) -> Product:
         async with transaction_context(self.session):

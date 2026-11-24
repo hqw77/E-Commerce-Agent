@@ -28,6 +28,7 @@ export interface Product {
   category_id: number;
   name: string;
   description: string | null;
+  image_url: string | null;
   status: ProductStatus;
   published_at: string | null;
   archived_at: string | null;
@@ -51,6 +52,7 @@ export interface ProductCreateRequest {
   category_id: number;
   name: string;
   description?: string | null;
+  image_url?: string | null;
   skus?: Array<{
     sku_code: string;
     attributes: Record<string, string>;
@@ -59,9 +61,11 @@ export interface ProductCreateRequest {
 }
 
 export interface ProductUpdateRequest {
+  product_no?: string;
   name?: string;
   description?: string | null;
   category_id?: number;
+  image_url?: string | null;
 }
 
 export interface SkuCreateRequest {
@@ -79,16 +83,4 @@ export interface Category {
   status: 'ENABLED' | 'DISABLED';
   created_at: string;
   updated_at: string;
-}
-
-export interface CategoryCreateRequest {
-  name: string;
-  parent_id?: number | null;
-  sort_order?: number;
-}
-
-export interface CategoryUpdateRequest {
-  name?: string;
-  sort_order?: number;
-  status?: 'ENABLED' | 'DISABLED';
 }

@@ -22,9 +22,9 @@ export function RegisterPage() {
     setError(null);
     try {
       await register({ email: values.email, password: values.password });
-      await login({ email: values.email, password: values.password });
+      const user = await login({ email: values.email, password: values.password });
       message.success('注册成功');
-      navigate('/dashboard', { replace: true });
+      navigate(user.is_admin ? '/dashboard' : '/shop', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败');
     } finally {

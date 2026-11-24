@@ -1,6 +1,6 @@
 import {
-  FileTextOutlined,
   MessageOutlined,
+  ProfileOutlined,
   ShoppingCartOutlined,
   TagsOutlined,
 } from '@ant-design/icons';
@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { listProducts } from '../../api/products';
 import { listOrders } from '../../api/orders';
-import { listDocuments } from '../../api/knowledge';
+import { listAfterSales } from '../../api/afterSales';
 import { errorMessage } from '../../utils/error';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -21,27 +21,27 @@ export function DashboardPage() {
   });
   const orders = useQuery({
     queryKey: ['dashboard', 'orders'],
-    queryFn: () => listOrders({ page: 1, page_size: 1 }),
+    queryFn: () => listOrders({ status: 'CREATED', page: 1, page_size: 1 }),
   });
-  const knowledge = useQuery({
-    queryKey: ['dashboard', 'knowledge'],
-    queryFn: () => listDocuments({ page: 1, page_size: 1 }),
+  const afterSales = useQuery({
+    queryKey: ['dashboard', 'after-sales'],
+    queryFn: () => listAfterSales({ status: 'PENDING_REVIEW', page: 1, page_size: 1 }),
   });
-  const errors = [products.error, orders.error, knowledge.error].filter(Boolean);
+  const errors = [products.error, orders.error, afterSales.error].filter(Boolean);
 
   return (
     <div className="page-stack">
       <div className="hero-panel">
         <div>
-          <Typography.Text className="eyebrow">E-COMMERCE AGENT CONSOLE</Typography.Text>
+          <Typography.Text className="eyebrow">清风数码 · 运营后台</Typography.Text>
           <Typography.Title level={2}>你好，{user?.email ?? '管理员'}</Typography.Title>
           <Typography.Paragraph type="secondary">
-            在一个工作台里管理真实业务数据、知识库与 AI Agent 的受控执行流程。
+            在一个工作台里管理商品、库存、订单、售后与受控 AI Agent。
           </Typography.Paragraph>
           <Space wrap>
             <Link to="/agent">
               <Button type="primary" icon={<MessageOutlined />}>
-                打开 AI Agent
+                打开 AI 助手
               </Button>
             </Link>
             <Link to="/products">
@@ -50,9 +50,9 @@ export function DashboardPage() {
           </Space>
         </div>
         <div className="hero-orbit">
-          <span>LangGraph</span>
-          <span>RAG</span>
+          <span>Commerce</span>
           <span>Service</span>
+          <span>Agent</span>
         </div>
       </div>
 
@@ -79,7 +79,7 @@ export function DashboardPage() {
         <Col xs={24} sm={12} xl={6}>
           <Card className="metric-card">
             <Statistic
-              title="订单总数"
+              title="待发货订单"
               value={orders.data?.total ?? 0}
               prefix={<ShoppingCartOutlined />}
             />
@@ -89,17 +89,17 @@ export function DashboardPage() {
         <Col xs={24} sm={12} xl={6}>
           <Card className="metric-card">
             <Statistic
-              title="知识库文档"
-              value={knowledge.data?.total ?? 0}
-              prefix={<FileTextOutlined />}
+              title="待审核售后"
+              value={afterSales.data?.total ?? 0}
+              prefix={<ProfileOutlined />}
             />
-            <Link to="/knowledge">进入知识库</Link>
+            <Link to="/after-sales">进入售后管理</Link>
           </Card>
         </Col>
         <Col xs={24} sm={12} xl={6}>
           <Card className="metric-card">
             <Statistic
-              title="Agent 能力"
+              title="AI 助手"
               value="受控执行"
               prefix={<MessageOutlined />}
             />
@@ -117,9 +117,9 @@ export function DashboardPage() {
             </Typography.Paragraph>
           </Col>
           <Col xs={24} md={8}>
-            <Typography.Title level={5}>可信知识</Typography.Title>
+            <Typography.Title level={5}>状态机</Typography.Title>
             <Typography.Paragraph type="secondary">
-              RAG 文档在后台入库；Agent 回答的来源由后端检索结果生成。
+              订单履约与 EXCHANGE 售后由后端状态机推进，前端只展示真实状态。
             </Typography.Paragraph>
           </Col>
           <Col xs={24} md={8}>

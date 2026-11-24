@@ -23,7 +23,7 @@ def test_product_tables_are_registered() -> None:
 
 def test_table_column_counts() -> None:
     assert len(Category.__table__.columns) == 7
-    assert len(Product.__table__.columns) == 10
+    assert len(Product.__table__.columns) == 11
     assert len(Sku.__table__.columns) == 9
     assert len(Inventory.__table__.columns) == 6
     assert len(InventoryTransaction.__table__.columns) == 14

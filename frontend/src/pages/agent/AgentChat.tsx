@@ -8,6 +8,7 @@ import { errorMessage } from '../../utils/error';
 import { formatDate } from '../../utils/format';
 import { PendingActionCard } from './PendingActionCard';
 import { SourceList } from './SourceList';
+import { useAuthStore } from '../../stores/authStore';
 
 interface ChatItem {
   id: string;
@@ -21,14 +22,15 @@ interface ChatItem {
 }
 
 const quickPrompts = [
-  '查询最近的订单',
+  '推荐一款 5000 元以内的手机',
+  '这款商品还有库存吗？',
   '换货需要满足什么条件？',
   '帮我取消未发货订单',
-  '查询我的售后记录',
 ];
 
 export function AgentChatPage() {
   const { message, modal } = App.useApp();
+  const isAdmin = useAuthStore((state) => state.user?.is_admin ?? false);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -134,10 +136,10 @@ export function AgentChatPage() {
     <div className="agent-shell">
       <aside className="agent-sidebar">
         <div>
-          <Typography.Text className="eyebrow">LANGGRAPH AGENT</Typography.Text>
-          <Typography.Title level={3}>业务对话</Typography.Title>
+          <Typography.Text className="eyebrow">AI SHOPPING ASSISTANT</Typography.Text>
+          <Typography.Title level={3}>智能购物助手</Typography.Title>
           <Typography.Paragraph type="secondary">
-            普通对话、RAG 知识、业务查询和受控写操作。
+            商品推荐、库存查询、订单查询和售后办理。
           </Typography.Paragraph>
         </div>
         <Button
@@ -159,7 +161,7 @@ export function AgentChatPage() {
           ))}
         </div>
         <Typography.Text type="secondary" className="agent-note">
-          Agent 不直接访问数据库；订单取消与售后申请必须经过独立确认接口。
+          商品、库存和订单信息由后端实时查询；取消订单与换货需要确认后执行。
         </Typography.Text>
       </aside>
 
@@ -170,7 +172,7 @@ export function AgentChatPage() {
               <RobotOutlined />
               <Typography.Title level={4}>从一个真实业务问题开始</Typography.Title>
               <Typography.Paragraph type="secondary">
-                例如：查询我的订单、退款条件是什么，或准备取消一个待支付订单。
+                例如：推荐一款手机、这款还有库存吗，或查询我的订单。
               </Typography.Paragraph>
             </div>
           ) : (
@@ -182,13 +184,13 @@ export function AgentChatPage() {
                 />
                 <div className="chat-bubble">
                   <div className="chat-meta">
-                    <Typography.Text strong>{item.role === 'user' ? '你' : 'E-Commerce Agent'}</Typography.Text>
+                    <Typography.Text strong>{item.role === 'user' ? '你' : '清风数码助手'}</Typography.Text>
                     {item.createdAt ? (
                       <Typography.Text type="secondary">{formatDate(item.createdAt)}</Typography.Text>
                     ) : null}
                   </div>
                   <Typography.Paragraph className="chat-answer">{item.content}</Typography.Paragraph>
-                  {item.traceId ? (
+                  {isAdmin && item.traceId ? (
                     <Typography.Text type="secondary" className="agent-trace-link">
                       trace: <Link to={`/agent/debug?trace_id=${item.traceId}`}>{item.traceId}</Link>
                     </Typography.Text>

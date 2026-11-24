@@ -4,14 +4,22 @@ import zhCN from 'antd/locale/zh_CN';
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from './layouts/AdminLayout';
+import { ShopLayout } from './layouts/ShopLayout';
+import { AdminRoute } from './router/AdminRoute';
 import { ProtectedRoute } from './router/ProtectedRoute';
+import { AppLoading } from './components/Common';
 import { bootstrapAuth, useAuthStore } from './stores/authStore';
 import { LoginPage } from './pages/auth/Login';
 import { RegisterPage } from './pages/auth/Register';
 import { DashboardPage } from './pages/dashboard/Dashboard';
+import { ShopHomePage } from './pages/shop/ShopHome';
+import { ShopProductPage } from './pages/shop/ShopProduct';
+import { ShopOrdersPage } from './pages/shop/ShopOrders';
+import { ShopOrderDetailPage } from './pages/shop/ShopOrderDetail';
+import { ShopAfterSalesPage } from './pages/shop/ShopAfterSales';
+import { ShopAfterSaleDetailPage } from './pages/shop/ShopAfterSaleDetail';
 import { ProductListPage } from './pages/products/ProductList';
 import { ProductDetailPage } from './pages/products/ProductDetail';
-import { CategoryListPage } from './pages/categories/CategoryList';
 import { InventoryListPage } from './pages/inventory/InventoryList';
 import { InventoryTransactionsPage } from './pages/inventory/InventoryTransactions';
 import { OrderListPage } from './pages/orders/OrderList';
@@ -32,6 +40,18 @@ const queryClient = new QueryClient({
   },
 });
 
+function HomeRedirect() {
+  const { status, user } = useAuthStore();
+
+  if (status === 'idle' || status === 'loading') {
+    return <AppLoading text="正在加载商城…" />;
+  }
+  if (status === 'authenticated' && user?.is_admin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Navigate to="/shop" replace />;
+}
+
 function AppRoutes() {
   const status = useAuthStore((state) => state.status);
 
@@ -43,17 +63,60 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/shop" element={<ShopLayout />}>
+        <Route index element={<ShopHomePage />} />
+        <Route path="products/:productNo" element={<ShopProductPage />} />
+        <Route
+          path="assistant"
+          element={
+            <ProtectedRoute>
+              <AgentChatPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="orders"
+          element={
+            <ProtectedRoute>
+              <ShopOrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="orders/:orderNo"
+          element={
+            <ProtectedRoute>
+              <ShopOrderDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="after-sales"
+          element={
+            <ProtectedRoute>
+              <ShopAfterSalesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="after-sales/:afterSalesNo"
+          element={
+            <ProtectedRoute>
+              <ShopAfterSaleDetailPage />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
       <Route
         element={
-          <ProtectedRoute>
+          <AdminRoute>
             <AdminLayout />
-          </ProtectedRoute>
+          </AdminRoute>
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/products" element={<ProductListPage />} />
         <Route path="/products/:productId" element={<ProductDetailPage />} />
-        <Route path="/categories" element={<CategoryListPage />} />
         <Route path="/inventory" element={<InventoryListPage />} />
         <Route path="/inventory/transactions" element={<InventoryTransactionsPage />} />
         <Route path="/orders" element={<OrderListPage />} />
@@ -65,8 +128,8 @@ function AppRoutes() {
         <Route path="/agent" element={<AgentChatPage />} />
         <Route path="/agent/debug" element={<TraceConsolePage />} />
       </Route>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="*" element={<Navigate to="/shop" replace />} />
     </Routes>
   );
 }
