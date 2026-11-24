@@ -518,6 +518,7 @@ RAG 评测是小样本，无答案阈值不是生产认证
 - [测试与质量](docs/06-testing-and-quality.md)
 - [面试问答](docs/07-interview-qa.md)
 - [现场演示脚本](docs/08-demo-script.md)
+- [面试学习规划](docs/09-study-plan.md)
 
 ---
 
