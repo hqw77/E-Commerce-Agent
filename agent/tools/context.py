@@ -9,6 +9,7 @@ from app.core.config import Settings
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agent.observability.trace import TraceRecorder
 from agent.tools.confirmation import ConfirmationStore
 
 
@@ -21,3 +22,5 @@ class ToolContext:
     settings: Settings
     conversation_id: UUID
     confirmation_store: ConfirmationStore
+    trace: TraceRecorder | None = None
+    route: str | None = None

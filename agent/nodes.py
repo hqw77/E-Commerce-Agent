@@ -14,9 +14,9 @@ from agent.conversation import Conversation
 from agent.guardrails import (
     select_context,
     sources_from_items,
-    validate_output,
 )
 from agent.llm import ConversationMessage, LLMResult, ToolAwareResult
+from agent.observability.instrumentation import route_for_intent
 from agent.prompts import (
     GENERAL_SYSTEM_PROMPT,
     KNOWLEDGE_SYSTEM_PROMPT,
@@ -25,8 +25,11 @@ from agent.prompts import (
     TOOL_ANSWER_SYSTEM_PROMPT,
     TOOL_SYSTEM_PROMPT,
     UNSUPPORTED_ACTION_ANSWER,
+    WORKFLOW_SYSTEM_PROMPT,
 )
+from agent.rag_evidence import evaluate_rag_evidence
 from agent.routing import classify_intent
+from agent.safety import SafetyPipeline
 from agent.state import AgentState, HistoryMessage, TokenUsage
 from agent.tools.context import ToolContext
 
@@ -63,6 +66,22 @@ async def classify_intent_node(
         llm=runtime.context.llm,
         message=state["user_message"],
     )
+    trace = runtime.context.trace
+    if trace is not None:
+        risk = (
+            "MEDIUM"
+            if intent in {"WORKFLOW", "UNSUPPORTED_ACTION"}
+            else "LOW"
+        )
+        trace.emit(
+            "route_decision",
+            node_name="classify_intent",
+            intent=intent,
+            route=route_for_intent(intent),
+            risk_level=risk,
+            execution_status="SUCCESS",
+            result_summary={"intent": intent},
+        )
     return {"intent": intent}
 
 
@@ -97,12 +116,72 @@ async def retrieve_knowledge_node(
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
     context = runtime.context
-    items = await context.retrieval.retrieve(
-        user=context.user,
+    retrieval = context.retrieval
+    retrieval_reason: str | None = None
+    if hasattr(retrieval, "retrieve_with_diagnostics"):
+        outcome = await retrieval.retrieve_with_diagnostics(
+            user=context.user,
+            query=state["user_message"],
+            top_k=context.settings.agent_rag_top_k,
+        )
+        items = outcome.items
+        retrieval_reason = outcome.reason
+    else:
+        # Test doubles and older boundary implementations remain supported.
+        items = await retrieval.retrieve(
+            user=context.user,
+            query=state["user_message"],
+            top_k=context.settings.agent_rag_top_k,
+        )
+        retrieval_reason = "OK" if items else "NO_CANDIDATES"
+
+    decision = evaluate_rag_evidence(
         query=state["user_message"],
-        top_k=context.settings.agent_rag_top_k,
+        items=items,
+        settings=context.settings,
+        retrieval_reason=retrieval_reason,
     )
-    return {"retrieved_items": items}
+    trace = context.trace
+    if trace is not None:
+        trace.emit(
+            "rag_retrieval",
+            node_name="retrieve_knowledge",
+            intent="RAG",
+            route="RAG",
+            risk_level="LOW",
+            execution_status=(
+                "SUCCESS"
+                if decision.answerable
+                else "EMPTY" if not items else "REJECTED"
+            ),
+            result_summary={
+                "retrieved_count": len(items),
+                "top_score": items[0].score if items else None,
+                "retrieval_reason": retrieval_reason,
+                "decision_reason": decision.reason,
+                "evidence_coverage": decision.evidence_coverage,
+            },
+        )
+        trace.emit(
+            "rag_decision",
+            node_name="retrieve_knowledge",
+            intent="RAG",
+            route="RAG",
+            risk_level="LOW",
+            execution_status="SUCCESS",
+            result_summary={
+                "answerable": decision.answerable,
+                "reason": decision.reason,
+                "top_score": decision.top_score,
+                "evidence_coverage": decision.evidence_coverage,
+                "min_score": decision.min_score,
+                "high_confidence_score": decision.high_confidence_score,
+                "min_evidence_coverage": decision.min_evidence_coverage,
+            },
+        )
+    return {
+        "retrieved_items": items if decision.answerable else [],
+    }
 
 
 async def knowledge_answer_node(
@@ -157,12 +236,22 @@ async def validate_output_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
-    answer = validate_output(
+    context = runtime.context
+    answer = SafetyPipeline(context.settings).validate_output(
         state.get("answer", ""),
         sources=state.get("sources", []),
         retrieved_items=state.get("retrieved_items", []),
-        settings=runtime.context.settings,
     )
+    trace = context.trace
+    if trace is not None:
+        trace.emit(
+            "output_validation",
+            node_name="validate_output",
+            intent=state.get("intent"),
+            route=route_for_intent(state.get("intent")),
+            execution_status="SUCCESS",
+            result_summary={"answer_length": len(answer)},
+        )
     return {"answer": answer}
 
 
@@ -193,12 +282,27 @@ async def save_conversation_node(
         conversation=conversation,
         token=context.lock_token,
     )
+    trace = context.trace
+    if trace is not None:
+        trace.emit(
+            "conversation_saved",
+            node_name="save_conversation",
+            intent=state.get("intent"),
+            route=route_for_intent(state.get("intent")),
+            execution_status="SUCCESS",
+            result_summary={"message_count": len(messages)},
+        )
     return {}
 
 
-async def plan_tool_node(
+async def _plan_tool(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
+    *,
+    system_prompt: str,
+    kinds: frozenset[str],
+    route: str,
+    node_name: str,
 ) -> dict[str, object]:
     context = runtime.context
     executor = context.tool_executor
@@ -206,15 +310,28 @@ async def plan_tool_node(
         raise RuntimeError("Tool executor is not configured")
 
     result = await context.llm.generate_with_tools(
-        system_prompt=TOOL_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         messages=[
             ConversationMessage(role=message.role, content=message.content)
             for message in state.get("history", [])
         ],
         user_message=state["user_message"],
-        tools=executor.registry.openai_tools(),
+        tools=executor.registry.openai_tools(kinds=kinds),
         max_output_tokens=256,
     )
+    trace = context.trace
+    if trace is not None:
+        trace.emit(
+            "tool_plan",
+            node_name=node_name,
+            intent=state.get("intent"),
+            route=route,
+            execution_status="SUCCESS",
+            result_summary={
+                "tool_call_count": len(result.tool_calls),
+                "tool_names": [call.name for call in result.tool_calls],
+            },
+        )
     if not result.tool_calls:
         return {
             "answer": result.text or "请补充要查询或操作的具体业务编号。",
@@ -230,6 +347,34 @@ async def plan_tool_node(
         "tool_call_count": 1,
         "token_usage": _token_usage(result),
     }
+
+
+async def plan_tool_node(
+    state: AgentState,
+    runtime: Runtime[AgentRuntimeContext],
+) -> dict[str, object]:
+    return await _plan_tool(
+        state,
+        runtime,
+        system_prompt=TOOL_SYSTEM_PROMPT,
+        kinds=frozenset({"READ"}),
+        route="TOOL",
+        node_name="plan_tool",
+    )
+
+
+async def plan_workflow_node(
+    state: AgentState,
+    runtime: Runtime[AgentRuntimeContext],
+) -> dict[str, object]:
+    return await _plan_tool(
+        state,
+        runtime,
+        system_prompt=WORKFLOW_SYSTEM_PROMPT,
+        kinds=frozenset({"PREPARE"}),
+        route="WORKFLOW",
+        node_name="plan_workflow",
+    )
 
 
 def _confirmation_store(context: AgentRuntimeContext):
@@ -260,6 +405,8 @@ async def execute_tool_node(
             settings=context.settings,
             conversation_id=UUID(state["conversation_id"]),
             confirmation_store=_confirmation_store(context),
+            trace=context.trace,
+            route=route_for_intent(state.get("intent")),
         ),
     )
     return {

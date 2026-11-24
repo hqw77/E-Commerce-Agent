@@ -10,8 +10,10 @@ from app.schemas.knowledge import RetrievalItem
 
 AgentIntent = Literal[
     "GENERAL",
+    "RAG",
     "KNOWLEDGE",
     "TOOL",
+    "WORKFLOW",
     "UNSUPPORTED_ACTION",
 ]
 
@@ -56,6 +58,7 @@ class AgentState(TypedDict, total=False):
     """The graph state. ORM User and AsyncSession must never enter this type."""
 
     request_id: str
+    trace_id: str
     conversation_id: str
     conversation_created_at: str
     user_id: int

@@ -379,3 +379,33 @@ async def test_execution_timeout_cancels_graph_and_does_not_save() -> None:
             user_id=user.id,
             conversation_id=conversation_id,
         )
+
+async def test_rag_low_evidence_returns_safe_answer_without_generation() -> None:
+    from agent.prompts import NO_KNOWLEDGE_ANSWER
+
+    settings = make_settings()
+    user = make_user(uuid4().int)
+    store = ConversationStore(settings)
+    fake_llm = FakeLLM(["RAG"])
+    runtime = AgentRuntime(
+        None,  # type: ignore[arg-type]
+        user,
+        settings,
+        llm=fake_llm,
+        retrieval=FakeRetrieval(
+            [make_item(content="退款申请需要审核。", score=0.604)]
+        ),
+        conversation_store=store,
+    )
+    result = None
+    try:
+        result = await runtime.chat(message="区块链钱包地址是什么？")
+        assert result.answer == NO_KNOWLEDGE_ANSWER
+        assert result.sources == []
+        assert len(fake_llm.calls) == 1
+    finally:
+        await cleanup(
+            store,
+            user_id=user.id,
+            conversation_id=result.conversation_id if result else None,
+        )

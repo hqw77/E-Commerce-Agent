@@ -381,3 +381,65 @@ async def test_pending_action_is_returned_by_chat_api(
     assert pending["confirmation_id"] == "confirmation-1"
     assert pending["conversation_id"] == str(conversation_id)
     assert pending["action_type"] == "CANCEL_ORDER"
+
+async def test_trace_endpoint_returns_owned_trace(
+    api_client: AsyncClient,
+    redis: Redis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = make_settings()
+    install_runtime(monkeypatch, redis, settings=settings)
+
+    response = await api_client.post(
+        "/api/v1/agent/chat",
+        json={"message": "hello"},
+    )
+    assert response.status_code == 200, response.text
+    trace_id = response.json()["trace_id"]
+    assert trace_id
+
+    trace = await api_client.get(f"/api/v1/agent/runs/{trace_id}")
+    assert trace.status_code == 200, trace.text
+    body = trace.json()
+    assert body["trace_id"] == trace_id
+    assert body["events"]
+    assert all(event["trace_id"] == trace_id for event in body["events"])
+    assert any(event["event_type"] == "request_end" for event in body["events"])
+    assert "system_prompt" not in trace.text.lower()
+    assert "api_key" not in trace.text.lower()
+
+
+async def test_trace_endpoint_unknown_trace_is_404(
+    api_client: AsyncClient,
+) -> None:
+    response = await api_client.get("/api/v1/agent/runs/does-not-exist")
+    assert response.status_code == 404
+
+
+async def test_trace_endpoint_requires_auth() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/api/v1/agent/runs/anything")
+    assert response.status_code == 401
+
+async def test_trace_endpoint_hides_other_user_trace(
+    api_client: AsyncClient,
+) -> None:
+    from agent.observability.store import BufferTraceCollector, get_trace_buffer
+    from agent.observability.trace import TraceRecorder
+
+    user = api_client.agent_user  # type: ignore[attr-defined]
+    trace_id = f"foreign-{uuid4().hex}"
+    trace = TraceRecorder(
+        trace_id=trace_id,
+        request_id=trace_id,
+        conversation_id=str(uuid4()),
+        user_id=user.id + 1,
+        collector=BufferTraceCollector(get_trace_buffer()),
+    )
+    trace.emit("request_start")
+
+    response = await api_client.get(f"/api/v1/agent/runs/{trace_id}")
+    assert response.status_code == 404

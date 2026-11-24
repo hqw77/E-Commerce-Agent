@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.conversation import ConversationStore
 from agent.llm import AgentLLM
+from agent.observability.trace import TraceRecorder
 from agent.tools.confirmation import ConfirmationStore
 from agent.tools.executor import ToolExecutor
 
@@ -34,3 +35,5 @@ class AgentRuntimeContext:
     is_new_conversation: bool
     tool_executor: ToolExecutor | None = None
     confirmation_store: ConfirmationStore | None = None
+    trace_id: str | None = None
+    trace: TraceRecorder | None = None

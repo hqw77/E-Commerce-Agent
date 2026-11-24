@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from typing import Literal
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -10,6 +13,16 @@ from app.repositories.knowledge import (
 )
 from app.schemas.knowledge import RetrievalItem
 from app.services.rag.embedding import BgeM3EmbeddingProvider
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalOutcome:
+    """Retrieved items plus a coarse, non-sensitive diagnostic reason."""
+
+    items: list[RetrievalItem]
+    reason: Literal["OK", "NO_ALLOWED_DOCUMENTS", "NO_CANDIDATES"]
+    allowed_document_count: int
+    candidate_count: int
 
 
 class KnowledgeRetrievalService:
@@ -37,6 +50,20 @@ class KnowledgeRetrievalService:
         query: str,
         top_k: int | None = None,
     ) -> list[RetrievalItem]:
+        outcome = await self.retrieve_with_diagnostics(
+            user=user,
+            query=query,
+            top_k=top_k,
+        )
+        return outcome.items
+
+    async def retrieve_with_diagnostics(
+        self,
+        *,
+        user: User,
+        query: str,
+        top_k: int | None = None,
+    ) -> RetrievalOutcome:
         limit = min(
             top_k or self.settings.rag_top_k,
             self.settings.rag_top_k,
@@ -45,7 +72,12 @@ class KnowledgeRetrievalService:
             is_admin=user.is_admin,
         )
         if not allowed:
-            return []
+            return RetrievalOutcome(
+                items=[],
+                reason="NO_ALLOWED_DOCUMENTS",
+                allowed_document_count=0,
+                candidate_count=0,
+            )
 
         version_ids = [version_id for _document_id, version_id in allowed]
         try:
@@ -68,7 +100,12 @@ class KnowledgeRetrievalService:
             ) from exc
 
         if not candidates:
-            return []
+            return RetrievalOutcome(
+                items=[],
+                reason="NO_CANDIDATES",
+                allowed_document_count=len(allowed),
+                candidate_count=0,
+            )
 
         chunk_ids = [candidate.chunk_id for candidate in candidates]
         rows = await self.chunks.list_retrieval_rows(
@@ -102,4 +139,9 @@ class KnowledgeRetrievalService:
             )
             if len(items) >= limit:
                 break
-        return items
+        return RetrievalOutcome(
+            items=items,
+            reason="OK" if items else "NO_CANDIDATES",
+            allowed_document_count=len(allowed),
+            candidate_count=len(candidates),
+        )

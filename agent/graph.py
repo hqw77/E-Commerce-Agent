@@ -12,6 +12,7 @@ from agent.nodes import (
     knowledge_answer_node,
     load_conversation,
     plan_tool_node,
+    plan_workflow_node,
     retrieve_knowledge_node,
     route_tool_name,
     save_conversation_node,
@@ -19,6 +20,7 @@ from agent.nodes import (
     unsupported_action_node,
     validate_output_node,
 )
+from agent.observability.instrumentation import instrument_node
 from agent.routing import route_intent
 from agent.state import AgentState
 
@@ -26,17 +28,54 @@ from agent.state import AgentState
 def build_agent_graph():
     """Build the graph once; per-request values arrive through context."""
     builder = StateGraph(AgentState, context_schema=AgentRuntimeContext)
-    builder.add_node("load_conversation", load_conversation)
-    builder.add_node("classify_intent", classify_intent_node)
-    builder.add_node("general_answer", general_answer_node)
-    builder.add_node("retrieve_knowledge", retrieve_knowledge_node)
-    builder.add_node("knowledge_answer", knowledge_answer_node)
-    builder.add_node("unsupported_action", unsupported_action_node)
-    builder.add_node("plan_tool", plan_tool_node)
-    builder.add_node("execute_tool", execute_tool_node)
-    builder.add_node("tool_answer", tool_answer_node)
-    builder.add_node("validate_output", validate_output_node)
-    builder.add_node("save_conversation", save_conversation_node)
+    builder.add_node(
+        "load_conversation",
+        instrument_node("load_conversation", load_conversation),
+    )
+    builder.add_node(
+        "classify_intent",
+        instrument_node("classify_intent", classify_intent_node),
+    )
+    builder.add_node(
+        "general_answer",
+        instrument_node("general_answer", general_answer_node),
+    )
+    builder.add_node(
+        "retrieve_knowledge",
+        instrument_node("retrieve_knowledge", retrieve_knowledge_node),
+    )
+    builder.add_node(
+        "knowledge_answer",
+        instrument_node("knowledge_answer", knowledge_answer_node),
+    )
+    builder.add_node(
+        "unsupported_action",
+        instrument_node("unsupported_action", unsupported_action_node),
+    )
+    builder.add_node(
+        "plan_tool",
+        instrument_node("plan_tool", plan_tool_node),
+    )
+    builder.add_node(
+        "plan_workflow",
+        instrument_node("plan_workflow", plan_workflow_node),
+    )
+    builder.add_node(
+        "execute_tool",
+        instrument_node("execute_tool", execute_tool_node),
+    )
+    builder.add_node(
+        "tool_answer",
+        instrument_node("tool_answer", tool_answer_node),
+    )
+    builder.add_node(
+        "validate_output",
+        instrument_node("validate_output", validate_output_node),
+    )
+    builder.add_node(
+        "save_conversation",
+        instrument_node("save_conversation", save_conversation_node),
+    )
 
     builder.add_edge(START, "load_conversation")
     builder.add_edge("load_conversation", "classify_intent")
@@ -47,6 +86,7 @@ def build_agent_graph():
             "general_answer": "general_answer",
             "retrieve_knowledge": "retrieve_knowledge",
             "plan_tool": "plan_tool",
+            "plan_workflow": "plan_workflow",
             "unsupported_action": "unsupported_action",
         },
     )
@@ -56,6 +96,14 @@ def build_agent_graph():
     builder.add_edge("unsupported_action", "validate_output")
     builder.add_conditional_edges(
         "plan_tool",
+        route_tool_name,
+        {
+            "execute_tool": "execute_tool",
+            "validate_output": "validate_output",
+        },
+    )
+    builder.add_conditional_edges(
+        "plan_workflow",
         route_tool_name,
         {
             "execute_tool": "execute_tool",

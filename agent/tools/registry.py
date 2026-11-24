@@ -53,5 +53,13 @@ class ToolRegistry:
     def names(self) -> frozenset[str]:
         return frozenset(self._tools)
 
-    def openai_tools(self) -> list[dict[str, Any]]:
-        return [tool.openai_spec() for tool in self._tools.values()]
+    def openai_tools(
+        self,
+        *,
+        kinds: frozenset[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        return [
+            tool.openai_spec()
+            for tool in self._tools.values()
+            if kinds is None or tool.kind in kinds
+        ]
