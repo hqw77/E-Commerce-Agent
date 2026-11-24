@@ -1,19 +1,15 @@
+"""User-facing order API without payment endpoints."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import CurrentUser
-from app.api.v1.serializers import order_response, payment_response
+from app.api.v1.serializers import order_response
 from app.db.session import get_db
-from app.schemas.order import (
-    OrderCreateRequest,
-    OrderListResponse,
-    OrderResponse,
-)
-from app.schemas.payment import PaymentCreateRequest, PaymentResponse
+from app.schemas.order import OrderCreateRequest, OrderListResponse, OrderResponse
 from app.services.order import OrderService
-from app.services.payment import PaymentService
 
 router = APIRouter()
 
@@ -34,11 +30,7 @@ async def create_order(
     return order_response(order)
 
 
-@router.get(
-    "",
-    response_model=OrderListResponse,
-    summary="List my orders",
-)
+@router.get("", response_model=OrderListResponse, summary="List my orders")
 async def list_orders(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
@@ -79,7 +71,7 @@ async def get_order(
 @router.post(
     "/{order_no}/cancel",
     response_model=OrderResponse,
-    summary="Cancel my pending order",
+    summary="Cancel my unshipped order",
 )
 async def cancel_order(
     order_no: Annotated[str, Path(min_length=1, max_length=32)],
@@ -94,23 +86,3 @@ async def cancel_order(
         reason=reason,
     )
     return order_response(order)
-
-
-@router.post(
-    "/{order_no}/payments",
-    response_model=PaymentResponse,
-    summary="Create or get the order payment",
-)
-async def create_payment(
-    order_no: Annotated[str, Path(min_length=1, max_length=32)],
-    request: PaymentCreateRequest,
-    session: Annotated[AsyncSession, Depends(get_db)],
-    user: CurrentUser,
-) -> PaymentResponse:
-    service = PaymentService(session)
-    payment, pay_url = await service.create_payment(
-        user_id=user.id,
-        order_no=order_no,
-        request=request,
-    )
-    return payment_response(payment, pay_url=pay_url)

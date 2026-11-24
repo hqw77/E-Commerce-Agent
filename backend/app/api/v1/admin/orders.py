@@ -1,3 +1,5 @@
+"""Admin order API: list, detail, ship, deliver and complete."""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -6,22 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import CurrentAdmin
 from app.api.v1.serializers import order_response
 from app.db.session import get_db
-from app.schemas.order import (
-    CloseExpiredResponse,
-    OrderListResponse,
-    OrderResponse,
-    ShipOrderRequest,
-)
+from app.schemas.order import OrderListResponse, OrderResponse, ShipOrderRequest
 from app.services.order import OrderService
 
 router = APIRouter()
 
 
-@router.get(
-    "",
-    response_model=OrderListResponse,
-    summary="List all orders",
-)
+@router.get("", response_model=OrderListResponse, summary="List all orders")
 async def list_orders(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
@@ -102,16 +95,3 @@ async def complete_order(
     service = OrderService(session)
     order = await service.complete(order_no=order_no)
     return order_response(order)
-
-
-@router.post(
-    "/close-expired",
-    response_model=CloseExpiredResponse,
-    summary="Close expired pending orders",
-)
-async def close_expired_orders(
-    session: Annotated[AsyncSession, Depends(get_db)],
-    _admin: CurrentAdmin,
-) -> CloseExpiredResponse:
-    service = OrderService(session)
-    return CloseExpiredResponse(closed_count=await service.close_expired_orders())

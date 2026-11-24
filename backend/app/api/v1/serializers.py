@@ -1,30 +1,20 @@
+"""API response assembly for orders and after-sales records."""
+
 from typing import cast
 
 from app.models.after_sale import AfterSale
 from app.models.order import Order
 from app.models.order_item import OrderItem
-from app.models.payment import Payment
-from app.models.refund import Refund
 from app.schemas.after_sale import (
     AfterSaleResponse,
     AfterSaleStatus,
     AfterSaleType,
 )
 from app.schemas.order import OrderResponse
-from app.schemas.payment import PaymentResponse, RefundResponse
 
 
 def order_response(order: Order) -> OrderResponse:
     return OrderResponse.model_validate(order)
-
-
-def payment_response(
-    payment: Payment,
-    *,
-    pay_url: str | None = None,
-) -> PaymentResponse:
-    response = PaymentResponse.model_validate(payment)
-    return response.model_copy(update={"pay_url": pay_url})
 
 
 def after_sale_response(
@@ -57,24 +47,4 @@ def after_sale_response(
         completed_at=after_sale.completed_at,
         cancelled_at=after_sale.cancelled_at,
         created_at=after_sale.created_at,
-    )
-
-
-def refund_response(
-    refund: Refund,
-    *,
-    after_sales_no: str | None = None,
-) -> RefundResponse:
-    return RefundResponse(
-        refund_no=refund.refund_no,
-        status=refund.status,
-        amount=refund.amount,
-        reason=refund.reason,
-        channel=refund.channel,
-        after_sales_no=after_sales_no,
-        failure_code=refund.failure_code,
-        failure_message=refund.failure_message,
-        requested_at=refund.requested_at,
-        processed_at=refund.processed_at,
-        created_at=refund.created_at,
     )

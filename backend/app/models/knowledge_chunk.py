@@ -1,3 +1,9 @@
+"""知识 Chunk 模型.
+
+knowledge_chunks 保存权威文本和来源元数据, Qdrant 只保存对应向量和 ID.
+检索命中向量后必须回查这里, 确保文本, 版本和权限仍然有效.
+"""
+
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -23,10 +29,11 @@ if TYPE_CHECKING:
 
 
 class KnowledgeChunk(Base):
-    """Authoritative chunk text; Qdrant stores only its vector and IDs."""
+    """知识片段权威文本, 是 RAG Source 的最终来源."""
 
     __tablename__ = "knowledge_chunks"
 
+    # 同一版本内 chunk_index 唯一; 索引支持按版本和内容哈希查找.
     __table_args__ = (
         UniqueConstraint(
             "version_id",
@@ -69,8 +76,10 @@ class KnowledgeChunk(Base):
 
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # 原文使用 LONGTEXT, 避免长文档被截断; 向量不在这里保存.
     content: Mapped[str] = mapped_column(mysql.LONGTEXT(), nullable=False)
 
+    # 内容哈希用于去重和校验, 不代替业务主键.
     content_hash: Mapped[str] = mapped_column(
         mysql.CHAR(64, charset="ascii", collation="ascii_bin"),
         nullable=False,
@@ -82,10 +91,12 @@ class KnowledgeChunk(Base):
 
     section_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # 原文偏移量用于定位和调试切分结果.
     start_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     end_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # 保存 chunking_version, unit_count 等非检索元数据.
     chunk_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata",
         JSON,

@@ -1,3 +1,9 @@
+"""支付模型.
+
+payments 保存订单的支付尝试和渠道状态. 一个订单最多一条支付记录,
+支付成功, 失败, 关闭和退款进度分别记录, 便于处理回调和迟到支付.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -24,10 +30,11 @@ if TYPE_CHECKING:
 
 
 class Payment(Base):
-    """One payment attempt for an order."""
+    """订单支付记录, 一个订单最多对应一条."""
 
     __tablename__ = "payments"
 
+    # order_id 唯一保证一个订单只有一条支付记录; provider_trade_no 用于回调幂等.
     __table_args__ = (
         UniqueConstraint("payment_no", name="uq_payments_payment_no"),
         UniqueConstraint("order_id", name="uq_payments_order_id"),
@@ -51,11 +58,13 @@ class Payment(Base):
         autoincrement=True,
     )
 
+    # 对外支付号, 与第三方 out_trade_no 对应.
     payment_no: Mapped[str] = mapped_column(
         mysql.VARCHAR(32, charset="ascii", collation="ascii_bin"),
         nullable=False,
     )
 
+    # 支付必须绑定订单, 防止脱离订单创建孤立资金记录.
     order_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -78,6 +87,7 @@ class Payment(Base):
         nullable=False,
     )
 
+    # 支付渠道, 例如 MOCK/ALIPAY; 不同渠道的回调和退款流程不同.
     channel: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
@@ -88,23 +98,27 @@ class Payment(Base):
         nullable=False,
     )
 
+    # PENDING/SUCCESS/FAILED/CLOSED/PARTIALLY_REFUNDED/REFUNDED 等状态.
     status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
         server_default="PENDING",
     )
 
+    # 第三方交易号, 回调验签后写入, 也是重复回调识别依据.
     provider_trade_no: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
     )
 
+    # 已退款金额, 由退款服务维护, 不能超过支付金额.
     refunded_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
         server_default=text("0.00"),
     )
 
+    # 记录 LATE_PAYMENT 等异常原因, 不与正常支付状态混在一起.
     exception_reason: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,

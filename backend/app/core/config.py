@@ -1,3 +1,9 @@
+"""应用配置中心.
+
+所有运行参数在这里集中声明, 业务代码只依赖 Settings 对象, 不直接读取环境变量.
+配置优先级为: 环境变量 > .env 文件 > 字段默认值.
+"""
+
 from functools import lru_cache
 from typing import Literal
 
@@ -16,8 +22,13 @@ class Settings(BaseSettings):
 
     Configuration priority:
     Environment variables > .env file > default values.
+
+    使用 pydantic-settings 统一完成类型转换和启动期校验, 避免配置错误拖到请求阶段才暴露.
+    SecretStr 用于密码/API Key 等敏感值, 防止日志或 repr 直接输出明文.
     """
 
+    # 指定 .env 路径和大小写规则. extra="ignore" 允许环境里存在未声明的变量,
+    # 避免部署环境中的无关变量导致应用启动失败.
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -25,6 +36,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # 应用级配置: 环境标识影响安全校验, debug 同时控制 SQL echo 等开发行为.
     # Application
     app_name: str = "E-Commerce Agent"
     app_env: Literal["development", "testing", "production"] = "development"
@@ -35,6 +47,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG"
     log_format: Literal["console", "json"] = "console"
 
+    # 数据库连接参数. 密码使用 SecretStr, 只有显式 get_secret_value() 才能取出.
     # MySQL
     mysql_host: str = "127.0.0.1"
     mysql_port: int = 3306
@@ -42,6 +55,7 @@ class Settings(BaseSettings):
     mysql_password: SecretStr = SecretStr("")
     mysql_database: str = "ecommerce_agent"
 
+    # Redis 用于限流, 会话, 锁和临时确认状态, 不是业务数据的最终权威来源.
     # Redis
     redis_host: str = "127.0.0.1"
     redis_port: int = 6379
@@ -80,6 +94,19 @@ class Settings(BaseSettings):
         le=300,
     )
     agent_rag_top_k: int = Field(default=5, ge=1, le=20)
+    # TASK-021.2: no-answer policy uses a score band plus lexical evidence.
+    # Values are offline-calibrated candidates, not production certification.
+    agent_rag_min_score: float = Field(default=0.60, ge=0.0, le=1.0)
+    agent_rag_high_confidence_score: float = Field(
+        default=0.625,
+        ge=0.0,
+        le=1.0,
+    )
+    agent_rag_min_evidence_coverage: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+    )
     agent_rate_limit_per_minute: int = Field(default=30, ge=1, le=10000)
     agent_max_tool_calls_per_turn: int = Field(default=4, ge=1, le=20)
     agent_action_confirmation_ttl_seconds: int = Field(
@@ -88,6 +115,8 @@ class Settings(BaseSettings):
         le=3600,
     )
 
+    # JWT 配置. issuer/audience 用于限制 token 的签发和消费范围,
+    # leeway 容忍客户端与服务端之间的少量时钟偏差.
     # JWT
     jwt_secret_key: SecretStr = SecretStr("")
     jwt_algorithm: Literal["HS256"] = "HS256"
@@ -97,10 +126,12 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
     jwt_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
-    # Orders / payments / after-sales
+    # 交易业务时间窗口. 订单过期时间仅作为历史字段保留, 售后窗口继续使用.
+    # Orders / after-sales
     order_payment_timeout_minutes: int = Field(default=30, ge=1, le=1440)
     after_sales_window_hours: int = Field(default=168, ge=1, le=720)
 
+    # RAG 配置. Qdrant 只保存向量索引, 文档/版本/Chunk 的权威数据仍在 MySQL.
     # RAG / knowledge base
     rag_enabled: bool = True
     rag_qdrant_url: str = "http://127.0.0.1:6333"
@@ -119,20 +150,15 @@ class Settings(BaseSettings):
     rag_max_file_size_mb: int = Field(default=20, ge=1, le=200)
     rag_storage_dir: str = "storage/knowledge"
 
-    # Alipay sandbox (empty means disabled)
-    alipay_app_id: str = ""
-    alipay_seller_id: str = ""
-    alipay_private_key: SecretStr = SecretStr("")
-    alipay_public_key: SecretStr = SecretStr("")
-    alipay_gateway: str = "https://openapi.alipaydev.com/gateway.do"
-    alipay_notify_url: str = ""
-    alipay_return_url: str = ""
-    alipay_frontend_return_url: str = ""
-
     @field_validator("jwt_issuer", "jwt_audience", mode="before")
     @classmethod
     def validate_jwt_identifiers(cls, value: str) -> str:
-        """Reject empty or whitespace-only JWT identifiers."""
+        """
+        拒绝空字符串或仅空白的 JWT 标识.
+
+        issuer 和 audience 是 token 校验的一部分, 空值会让 token 被任意服务接受,
+        因此在配置加载阶段直接失败.
+        """
         if not isinstance(value, str) or not value.strip():
             raise ValueError("JWT issuer and audience must not be empty")
 
@@ -140,6 +166,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_jwt_configuration(self) -> "Settings":
+        # 生产环境必须配置足够长的 JWT 密钥, 这是启动前的 fail-fast 校验.
         secret = self.jwt_secret_key.get_secret_value()
 
         if self.app_env == "production" and not secret:
@@ -152,6 +179,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_agent_lock_configuration(self) -> "Settings":
+        # 会话锁必须在请求执行超时和安全余量之后才过期,
+        # 否则锁提前释放可能让同一会话被并发处理.
         lock_seconds = self.agent_conversation_lock_ttl_ms / 1000
         required = (
             self.agent_max_execution_seconds
@@ -169,6 +198,9 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """
     Return a cached Settings instance.
+
+    配置在进程内只解析一次, 避免每个请求重复读取 .env 和做校验.
+    测试需要覆盖配置时, 应显式构造 Settings, 不要修改全局单例.
     """
     return Settings()
 

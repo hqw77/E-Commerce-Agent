@@ -1,3 +1,9 @@
+"""管理端商品和 SKU API.
+
+商品基础信息, 上下架/归档, SKU 创建和查询都在这里. 商品状态变化会直接影响
+下单可用性, 因此全部由 ProductService/SkuService 做业务校验.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
@@ -32,7 +38,7 @@ async def create_product(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> ProductDetailResponse:
-    """Create a DRAFT product, optionally with nested SKUs."""
+    """创建 DRAFT 商品, 可同时创建嵌套 SKU. 创建后仍需显式上架."""
     service = ProductService(session)
     product = await service.create_product(request)
     return await service.get_product_detail(product.id)
@@ -55,7 +61,7 @@ async def list_products(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ProductListResponse:
-    """List products with status/category/keyword filters and pagination."""
+    """按状态, 分类和关键词分页查询商品."""
     service = ProductService(session)
     return await service.list_products(
         status=status_filter,
@@ -76,7 +82,7 @@ async def get_product(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> ProductDetailResponse:
-    """Return a product with its SKUs and inventory summaries."""
+    """查询商品详情, 包含 SKU 和库存摘要."""
     service = ProductService(session)
     return await service.get_product_detail(product_id)
 
@@ -92,7 +98,7 @@ async def update_product(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> ProductDetailResponse:
-    """Update name, description or category; status uses dedicated routes."""
+    """更新商品基础信息. 状态变更必须走独立的上下架/归档接口."""
     service = ProductService(session)
     await service.update_product(
         product_id,
@@ -112,7 +118,7 @@ async def activate_product(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> ProductDetailResponse:
-    """Publish a DRAFT or INACTIVE product."""
+    """上架 DRAFT/INACTIVE 商品, 使 SKU 可以被下单."""
     service = ProductService(session)
     await service.activate_product(product_id)
     return await service.get_product_detail(product_id)
@@ -128,7 +134,7 @@ async def deactivate_product(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> ProductDetailResponse:
-    """Move an ACTIVE product to INACTIVE."""
+    """下架 ACTIVE 商品, 阻止新的下单."""
     service = ProductService(session)
     await service.deactivate_product(product_id)
     return await service.get_product_detail(product_id)
@@ -144,7 +150,7 @@ async def archive_product(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> ProductDetailResponse:
-    """Archive a non-archived product."""
+    """归档商品. 归档后不应再参与正常销售."""
     service = ProductService(session)
     await service.archive_product(product_id)
     return await service.get_product_detail(product_id)
@@ -163,7 +169,7 @@ async def create_sku(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> SkuResponse:
-    """Create a SKU and its zero-stock inventory row."""
+    """为商品创建 SKU, 同时初始化零库存记录."""
     service = SkuService(session)
     sku = await service.create_sku(product_id, request)
     return SkuResponse.model_validate(sku)
@@ -179,7 +185,7 @@ async def list_skus(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> list[SkuResponse]:
-    """Return all SKUs belonging to a product."""
+    """返回商品下的全部 SKU."""
     service = SkuService(session)
     skus = await service.list_skus(product_id)
     return [SkuResponse.model_validate(sku) for sku in skus]

@@ -1,3 +1,9 @@
+"""结构化日志配置.
+
+structlog 负责生成 key-value 事件, 标准 logging 负责输出和级别控制.
+开发环境使用可读 console, 生产环境使用 JSON, 方便日志采集系统解析.
+"""
+
 import logging
 import logging.config
 import sys
@@ -8,12 +14,13 @@ from app.core.config import settings
 
 
 def setup_logging() -> None:
-    """Configure standard logging and structlog."""
+    """配置标准 logging 和 structlog, 应用启动时调用一次."""
 
     log_level = settings.log_level
 
     renderer: structlog.types.Processor
 
+    # JSON 便于集中式日志检索, console 便于本地开发阅读.
     if settings.log_format == "json":
         renderer = structlog.processors.JSONRenderer()
     else:
@@ -22,6 +29,7 @@ def setup_logging() -> None:
         )
 
     shared_processors: list[structlog.types.Processor] = [
+        # 把请求上下文中的 trace_id 等字段自动合并到每条日志.
         structlog.contextvars.merge_contextvars,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.add_log_level,
@@ -29,6 +37,7 @@ def setup_logging() -> None:
         structlog.processors.format_exc_info,
     ]
 
+    # 统一走标准 logging handler, 这样第三方库和业务日志使用同一输出格式.
     structlog.configure(
         processors=[
             *shared_processors,
@@ -72,5 +81,5 @@ def setup_logging() -> None:
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    """Return a structured logger."""
+    """返回带模块名的结构化 logger."""
     return structlog.get_logger(name)

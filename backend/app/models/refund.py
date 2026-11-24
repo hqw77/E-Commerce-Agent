@@ -1,3 +1,9 @@
+"""退款模型.
+
+refunds 记录对某笔支付的退款请求, 金额和状态由 RefundService 维护.
+退款可以来自售后审核, 也可以由管理员手工发起, 但都必须绑定原支付.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -25,10 +31,11 @@ if TYPE_CHECKING:
 
 
 class Refund(Base):
-    """Refund request against one payment."""
+    """针对一笔支付的退款记录, 售后退款和手工退款共用."""
 
     __tablename__ = "refunds"
 
+    # payment_id + idempotency_key 防重复退款; after_sales_id 唯一防一个售后多次退款.
     __table_args__ = (
         UniqueConstraint("refund_no", name="uq_refunds_refund_no"),
         UniqueConstraint(
@@ -67,6 +74,7 @@ class Refund(Base):
         nullable=False,
     )
 
+    # 退款必须指向原支付记录, 防止跨支付退款或超出可退金额.
     payment_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -78,6 +86,7 @@ class Refund(Base):
         nullable=False,
     )
 
+    # 售后退款关联售后单; 手工退款可以为空.
     after_sales_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -100,6 +109,7 @@ class Refund(Base):
         nullable=False,
     )
 
+    # 退款金额, 必须大于 0 且累计不能超过支付金额.
     amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
@@ -115,12 +125,14 @@ class Refund(Base):
         nullable=False,
     )
 
+    # PENDING/PROCESSING/SUCCESS/FAILED 等退款状态.
     status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
         server_default="PENDING",
     )
 
+    # 第三方退款单号, 用于查询未知结果和防止重复提交.
     provider_refund_no: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
@@ -172,6 +184,7 @@ class Refund(Base):
         back_populates="refunds",
     )
 
+    # 一个退款最多关联一个售后, 一个售后也最多对应一个退款.
     after_sale: Mapped["AfterSale | None"] = relationship(
         back_populates="refund",
         uselist=False,

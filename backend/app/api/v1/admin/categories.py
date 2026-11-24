@@ -1,3 +1,9 @@
+"""管理端分类 API.
+
+分类树只由管理员维护. 删除/修改前是否被商品引用由 Service 校验,
+Router 不直接操作数据库.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, status
@@ -27,7 +33,7 @@ async def create_category(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> CategoryResponse:
-    """Create a root category or a child category."""
+    """创建根分类或子分类. parent_id 的合法性由 Service 校验."""
     service = CategoryService(session)
     category = await service.create_category(
         parent_id=request.parent_id,
@@ -46,7 +52,7 @@ async def list_categories(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> list[CategoryResponse]:
-    """Return all categories as a flat list."""
+    """返回扁平分类列表, 前端可据此自行构建树."""
     service = CategoryService(session)
     categories = await service.list_categories()
     return [CategoryResponse.model_validate(category) for category in categories]
@@ -61,7 +67,7 @@ async def get_category_tree(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> list[CategoryTreeNode]:
-    """Return categories nested by parent."""
+    """返回按父子关系嵌套的分类树."""
     service = CategoryService(session)
     return await service.list_tree()
 
@@ -76,7 +82,7 @@ async def get_category(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> CategoryResponse:
-    """Return one category by ID."""
+    """按 ID 查询单个分类."""
     service = CategoryService(session)
     category = await service.get_category(category_id)
     return CategoryResponse.model_validate(category)
@@ -93,7 +99,7 @@ async def update_category(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> CategoryResponse:
-    """Update category fields; parent_id cannot be changed."""
+    """更新分类字段. parent_id 不允许通过该接口修改, 避免破坏商品归属."""
     service = CategoryService(session)
     category = await service.update_category(
         category_id,

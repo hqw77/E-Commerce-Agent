@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -41,6 +42,31 @@ class ChatResponse(BaseModel):
     sources: list[SourceResponse]
     pending_action: PendingActionResponse | None = None
     created_at: datetime
+    trace_id: str | None = None
+
+
+class TraceEventResponse(BaseModel):
+    trace_id: str
+    request_id: str
+    conversation_id: str
+    user_id: int
+    node_name: str | None
+    event_type: str
+    intent: str | None
+    route: str | None
+    tool_name: str | None
+    arguments_summary: dict[str, Any] | None
+    risk_level: str | None
+    execution_status: str
+    duration_ms: float | None
+    result_summary: dict[str, Any] | None
+    error_code: str | None
+    timestamp: str
+
+
+class TraceRunResponse(BaseModel):
+    trace_id: str
+    events: list[TraceEventResponse]
 
 
 class PendingActionResponse(BaseModel):

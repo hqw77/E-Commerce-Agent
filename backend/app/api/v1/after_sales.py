@@ -1,3 +1,10 @@
+"""售后 API.
+
+用户侧接口负责申请, 查询, 取消和填写退货物流.
+管理端接口负责审核, 收货和完成换货. 状态流转与退款规则由 AfterSaleService
+统一控制, Router 只做协议转换.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
@@ -28,6 +35,7 @@ async def _response(
     session: AsyncSession,
     after_sale,
 ) -> AfterSaleResponse:
+    """补充售后关联的订单和订单项信息, 统一生成响应."""
     order = await OrderRepository(session).get_by_id(after_sale.order_id)
     item = await OrderItemRepository(session).get_by_id(after_sale.order_item_id)
     if order is None or item is None:
@@ -47,6 +55,7 @@ async def apply_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> AfterSaleResponse:
+    """对指定订单提交售后申请. 归属, 时间窗口和重复申请由 Service 校验."""
     service = AfterSaleService(session)
     after_sale = await service.apply(
         user_id=user.id,
@@ -68,6 +77,7 @@ async def list_order_after_sales(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> AfterSaleListResponse:
+    """分页查询指定订单的售后记录. 先校验订单归属再读取关联数据."""
     service = AfterSaleService(session)
     # Ownership is checked through the order before loading its requests.
     order = await OrderRepository(session).get_by_no(order_no)
@@ -99,6 +109,7 @@ async def get_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> AfterSaleResponse:
+    """查询当前用户的售后详情, 非本人记录按 404 处理."""
     service = AfterSaleService(session)
     after_sale = await service.get_for_user(
         user_id=user.id,
@@ -117,6 +128,7 @@ async def cancel_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> AfterSaleResponse:
+    """取消仍处于待审核状态的售后申请."""
     service = AfterSaleService(session)
     after_sale = await service.cancel(
         user_id=user.id,
@@ -136,6 +148,7 @@ async def submit_return_shipment(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> AfterSaleResponse:
+    """用户填写退货物流信息, 供管理端后续收货和验收."""
     service = AfterSaleService(session)
     after_sale = await service.submit_return_shipment(
         user_id=user.id,
@@ -157,6 +170,7 @@ async def list_after_sales(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> AfterSaleListResponse:
+    """管理员分页查询全部售后申请."""
     service = AfterSaleService(session)
     items, total = await service.list_admin(
         page=page,
@@ -181,6 +195,7 @@ async def get_after_sales_admin(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> AfterSaleResponse:
+    """管理员查看任意售后详情."""
     service = AfterSaleService(session)
     after_sale = await service.get_admin(after_sales_no)
     return await _response(session, after_sale)
@@ -197,6 +212,7 @@ async def approve_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> AfterSaleResponse:
+    """管理员审核通过. 退款/换货的具体分支由 Service 根据售后类型决定."""
     service = AfterSaleService(session)
     after_sale = await service.approve(
         after_sales_no=after_sales_no,
@@ -217,6 +233,7 @@ async def reject_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> AfterSaleResponse:
+    """管理员拒绝售后申请, 必须记录审核意见."""
     service = AfterSaleService(session)
     after_sale = await service.reject(
         after_sales_no=after_sales_no,
@@ -236,6 +253,7 @@ async def receive_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> AfterSaleResponse:
+    """管理员确认收到退货, 触发后续退款或换货流程."""
     service = AfterSaleService(session)
     after_sale = await service.receive(
         after_sales_no=after_sales_no,
@@ -255,6 +273,7 @@ async def complete_exchange(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> AfterSaleResponse:
+    """管理员完成换货, 记录新商品物流信息并结束售后."""
     service = AfterSaleService(session)
     after_sale = await service.complete_exchange(
         after_sales_no=after_sales_no,

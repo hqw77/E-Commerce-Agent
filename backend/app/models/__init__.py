@@ -1,3 +1,9 @@
+"""ORM 模型聚合导出.
+
+集中导入全部模型, 确保 SQLAlchemy metadata 和 Alembic 能发现所有表.
+业务代码应从 app.models 导入, 而不是逐个导入模块文件.
+"""
+
 from app.models.after_sale import AfterSale
 from app.models.category import Category
 from app.models.inventory import Inventory

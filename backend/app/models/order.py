@@ -1,3 +1,10 @@
+"""订单模型.
+
+orders 保存订单头, 金额汇总以及支付/履约状态. 具体商品快照在 order_items,
+支付在 payments, 售后在 after_sales. 订单状态和履约状态分开建模, 避免把
+支付成功, 发货, 送达混成单一状态.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -26,10 +33,11 @@ if TYPE_CHECKING:
 
 
 class Order(Base):
-    """Customer order and its payment/fulfillment summary."""
+    """订单头, 聚合支付, 履约和售后关系."""
 
     __tablename__ = "orders"
 
+    # 订单号唯一; user_id + idempotency_key 防止重复提交创建重复订单.
     __table_args__ = (
         UniqueConstraint("order_no", name="uq_orders_order_no"),
         UniqueConstraint(
@@ -67,11 +75,13 @@ class Order(Base):
         autoincrement=True,
     )
 
+    # 对外订单号使用 ascii_bin, 保证大小写敏感且便于索引.
     order_no: Mapped[str] = mapped_column(
         mysql.VARCHAR(32, charset="ascii", collation="ascii_bin"),
         nullable=False,
     )
 
+    # 订单归属用户, RESTRICT 防止误删有订单的用户.
     user_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -83,24 +93,28 @@ class Order(Base):
         nullable=False,
     )
 
+    # 主状态: PENDING_PAYMENT/PAID/CANCELLED/CLOSED/COMPLETED.
     status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
         server_default="PENDING_PAYMENT",
     )
 
+    # 支付状态独立于主状态, 用于表达部分退款和迟到支付等情况.
     payment_status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
         server_default="UNPAID",
     )
 
+    # 履约状态: UNSHIPPED/SHIPPED/DELIVERED/COMPLETED.
     fulfillment_status: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
         server_default="UNSHIPPED",
     )
 
+    # 订单应付金额, 由下单时 SKU 快照计算, 不随后续调价变化.
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
@@ -144,16 +158,19 @@ class Order(Base):
         nullable=True,
     )
 
+    # 客户端幂等键; 与 request_fingerprint 一起区分重试和参数冲突.
     idempotency_key: Mapped[str] = mapped_column(
         mysql.VARCHAR(128, charset="ascii", collation="ascii_bin"),
         nullable=False,
     )
 
+    # 请求参数哈希; 同一幂等键但参数变化时必须返回冲突, 不能复用旧订单.
     request_fingerprint: Mapped[str] = mapped_column(
         mysql.CHAR(64, charset="ascii", collation="ascii_bin"),
         nullable=False,
     )
 
+    # 待支付截止时间; 超时任务据此关闭订单并释放库存.
     expires_at: Mapped[datetime] = mapped_column(
         mysql.DATETIME(fsp=6),
         nullable=False,
@@ -221,6 +238,7 @@ class Order(Base):
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
     )
 
+    # 关系字段只表达导航, 业务删除策略由 ForeignKey 和 Service 决定.
     user: Mapped["User"] = relationship(
         foreign_keys=[user_id],
     )

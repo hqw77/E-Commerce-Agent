@@ -1,3 +1,9 @@
+"""订单明细模型.
+
+order_items 是下单瞬间的商品快照, 保存商品编号, 名称, SKU 属性, 单价和数量.
+即使之后商品改名或 SKU 调价, 历史订单展示和金额也不能改变.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -27,10 +33,11 @@ if TYPE_CHECKING:
 
 
 class OrderItem(Base):
-    """Immutable snapshot of an ordered SKU."""
+    """订单中的 SKU 快照, 创建后不再跟随商品/SKU 变化."""
 
     __tablename__ = "order_items"
 
+    # 同一订单同一 SKU 只允许一行, 数量合并由下单逻辑处理.
     __table_args__ = (
         UniqueConstraint(
             "order_id",
@@ -89,6 +96,7 @@ class OrderItem(Base):
         nullable=False,
     )
 
+    # 以下商品字段是快照, 不是外键实时读取, 用于保证历史订单可追溯.
     product_no: Mapped[str] = mapped_column(
         mysql.VARCHAR(32, charset="ascii", collation="ascii_bin"),
         nullable=False,
@@ -115,6 +123,7 @@ class OrderItem(Base):
         server_default="CNY",
     )
 
+    # 下单时单价快照, 后续 SKU 调价不影响该订单.
     unit_price: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
@@ -125,6 +134,7 @@ class OrderItem(Base):
         nullable=False,
     )
 
+    # 行金额 = unit_price * quantity, 由下单服务计算并保存.
     line_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
@@ -148,6 +158,7 @@ class OrderItem(Base):
         foreign_keys=[sku_id],
     )
 
+    # 一个订单项可能对应多次售后历史, 活跃性由 Service 约束.
     after_sales: Mapped[list["AfterSale"]] = relationship(
         back_populates="order_item",
     )

@@ -1,8 +1,20 @@
+"""应用异常体系.
+
+业务层只抛出带有 code 和 status_code 的 AppException 子类, 由统一异常处理器
+转换成稳定的 HTTP 响应. 这样可以避免在 Router 里散落 try/except, 也避免把
+数据库错误或内部实现直接暴露给客户端.
+"""
+
 from typing import Any
 
 
 class AppException(Exception):
-    """Base exception for all application-level exceptions."""
+    """
+    所有应用异常的基类.
+
+    code 用于客户端和日志做稳定分类, status_code 用于 API 状态码,
+    details 只放安全的附加信息, 不应包含密码, token 或内部堆栈.
+    """
 
     def __init__(
         self,
@@ -22,7 +34,7 @@ class AppException(Exception):
 
 
 class BusinessException(AppException):
-    """Exception raised for expected business rule violations."""
+    """业务规则冲突, 默认映射为 400. 例如请求本身合法但当前业务状态不允许."""
 
     def __init__(
         self,
@@ -39,7 +51,7 @@ class BusinessException(AppException):
 
 
 class ValidationException(AppException):
-    """Exception raised for business-level request validation failures."""
+    """业务层校验失败, 默认映射为 422. 与 Pydantic 请求结构校验区分开."""
 
     def __init__(
         self,
@@ -56,7 +68,7 @@ class ValidationException(AppException):
 
 
 class AuthenticationException(AppException):
-    """Exception raised when authentication fails."""
+    """认证失败, 默认映射为 401. 默认附带 WWW-Authenticate: Bearer."""
 
     def __init__(
         self,
@@ -78,7 +90,7 @@ class AuthenticationException(AppException):
 
 
 class TokenExpiredException(AuthenticationException):
-    """Exception raised when a token has expired."""
+    """Access Token 已过期. 单独分类便于前端触发刷新流程."""
 
     def __init__(self, message: str = "Access token has expired") -> None:
         super().__init__(
@@ -88,7 +100,7 @@ class TokenExpiredException(AuthenticationException):
 
 
 class InvalidTokenException(AuthenticationException):
-    """Exception raised when a token is invalid."""
+    """Token 无效, 包括签名错误, claims 不合法和类型错误."""
 
     def __init__(self, message: str = "Invalid access token") -> None:
         super().__init__(
@@ -98,7 +110,7 @@ class InvalidTokenException(AuthenticationException):
 
 
 class PermissionDeniedException(AppException):
-    """Exception raised when permission is insufficient."""
+    """已认证但权限不足, 默认映射为 403. 普通用户访问管理员资源时使用."""
 
     def __init__(
         self,
@@ -114,7 +126,7 @@ class PermissionDeniedException(AppException):
 
 
 class ResourceNotFoundException(AppException):
-    """Exception raised when a requested resource does not exist."""
+    """资源不存在, 默认映射为 404. 对越权资源也常故意返回 404, 避免泄露存在性."""
 
     def __init__(
         self,
@@ -131,7 +143,7 @@ class ResourceNotFoundException(AppException):
 
 
 class ConflictException(AppException):
-    """Exception raised when a resource conflicts with existing data."""
+    """资源冲突, 默认映射为 409. 用于幂等键冲突, 非法状态转换和并发冲突."""
 
     def __init__(
         self,

@@ -4,7 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Existing records may still carry the legacy REFUND types; current requests
+# only accept EXCHANGE.
 AfterSaleType = Literal["REFUND_ONLY", "RETURN_REFUND", "EXCHANGE"]
+AfterSaleRequestType = Literal["EXCHANGE"]
 AfterSaleStatus = Literal[
     "PENDING_REVIEW",
     "APPROVED",
@@ -21,7 +24,7 @@ AfterSaleStatus = Literal[
 
 class AfterSaleApplyRequest(BaseModel):
     sku_code: str = Field(min_length=1, max_length=64)
-    type: AfterSaleType
+    type: AfterSaleRequestType
     reason: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
     evidence_urls: list[str] | None = None

@@ -1,3 +1,10 @@
+"""商品 SPU 模型.
+
+products 表示商品主数据, 具体规格和价格由 skus 承担.
+商品状态和 published_at/archived_at 必须成对满足约束, 防止出现
+已上架但无发布时间等不一致状态.
+"""
+
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -22,10 +29,11 @@ if TYPE_CHECKING:
 
 
 class Product(Base):
-    """SPU product entity."""
+    """商品 SPU, 是 SKU 的聚合根."""
 
     __tablename__ = "products"
 
+    # product_no 是外部可展示编号, 生命周期状态由 CheckConstraint 强制校验.
     __table_args__ = (
         UniqueConstraint(
             "product_no",
@@ -55,11 +63,13 @@ class Product(Base):
         autoincrement=True,
     )
 
+    # 使用 ascii_bin 保证编号大小写敏感且不受排序规则影响.
     product_no: Mapped[str] = mapped_column(
         mysql.VARCHAR(32, charset="ascii", collation="ascii_bin"),
         nullable=False,
     )
 
+    # 商品必须归属分类; RESTRICT 防止误删仍被商品引用的分类.
     category_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -81,17 +91,20 @@ class Product(Base):
         nullable=True,
     )
 
+    # DRAFT/ACTIVE/INACTIVE/ARCHIVED 与时间字段由数据库约束联合保证.
     status: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
         server_default="DRAFT",
     )
 
+    # 首次上架时间, DRAFT 必须为空, ACTIVE/INACTIVE 必须有值.
     published_at: Mapped[datetime | None] = mapped_column(
         mysql.DATETIME(fsp=6),
         nullable=True,
     )
 
+    # 归档时间, 只有 ARCHIVED 状态允许非空.
     archived_at: Mapped[datetime | None] = mapped_column(
         mysql.DATETIME(fsp=6),
         nullable=True,
@@ -109,6 +122,7 @@ class Product(Base):
         server_default=text("CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
     )
 
+    # 商品与分类多对一; SKU 与商品一对多.
     category: Mapped["Category"] = relationship(
         back_populates="products",
     )

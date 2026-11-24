@@ -1,48 +1,42 @@
+"""Order lifecycle without payment.
+
+Payment and fund refunds are intentionally out of the current project scope.
+Legacy payment tables/columns remain for historical compatibility, but runtime
+order flows only use CREATED / CANCELLED / COMPLETED plus fulfillment.
+"""
+
 from decimal import Decimal
 
-import httpx
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import (
-    ConflictException,
-    ResourceNotFoundException,
-)
-from app.core.logging import get_logger
+from app.core.exceptions import ConflictException, ResourceNotFoundException
 from app.models.order import Order
-from app.models.payment import Payment
 from app.models.product import Product
 from app.models.sku import Sku
 from app.repositories.inventory import InventoryRepository
 from app.repositories.order import OrderRepository
 from app.repositories.order_item import OrderItemRepository
-from app.repositories.payment import PaymentRepository
 from app.repositories.product import ProductRepository
 from app.repositories.sku import SkuRepository
 from app.schemas.order import OrderCreateRequest, ShipOrderRequest
-from app.services.alipay import AlipayClient, AlipayConfigurationError
 from app.services.inventory import InventoryService
 from app.services.transaction import transaction_context
-from app.utils.order import (
-    money,
-    new_order_no,
-    request_fingerprint,
-    utc_after,
-    utc_now,
-)
+from app.utils.order import money, new_order_no, request_fingerprint, utc_after, utc_now
 
-logger = get_logger(__name__)
+# Existing rows may still carry historical PAID status. New rows never use
+# PENDING_PAYMENT or PAID.
+LEGACY_SHIPPABLE_STATUSES = {"CREATED", "PAID"}
 
 
 class OrderService:
-    """Order creation, cancellation and fulfillment rules."""
+    """Order creation, cancellation, shipment and completion rules."""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.orders = OrderRepository(session)
         self.items = OrderItemRepository(session)
-        self.payments = PaymentRepository(session)
         self.products = ProductRepository(session)
         self.skus = SkuRepository(session)
         self.inventories = InventoryRepository(session)
@@ -157,7 +151,8 @@ class OrderService:
                 order = Order(
                     order_no=new_order_no(),
                     user_id=user_id,
-                    status="PENDING_PAYMENT",
+                    # Payment is out of scope; an order starts as CREATED.
+                    status="CREATED",
                     payment_status="UNPAID",
                     fulfillment_status="UNSHIPPED",
                     total_amount=total_amount,
@@ -170,6 +165,7 @@ class OrderService:
                     customer_remark=request.customer_remark,
                     idempotency_key=request.idempotency_key,
                     request_fingerprint=fingerprint,
+                    # Legacy non-null column; no auto-close job uses it now.
                     expires_at=utc_after(
                         minutes=settings.order_payment_timeout_minutes
                     ),
@@ -197,7 +193,7 @@ class OrderService:
                     await self.inventory.reserve(
                         sku_id=item.sku_id,
                         quantity=item.quantity,
-                        idempotency_key=(f"order:{order.id}:line:{item.id}:reserve"),
+                        idempotency_key=f"order:{order.id}:line:{item.id}:reserve",
                         business_type="ORDER",
                         business_id=order.id,
                         business_item_id=item.id,
@@ -277,22 +273,7 @@ class OrderService:
                 message="Order not found",
                 code="ORDER_NOT_FOUND",
             )
-        items = await self.items.list_by_order(order.id)
-        return order, items
-
-    async def _close_alipay_best_effort(self, payment: Payment | None) -> None:
-        if payment is None or payment.channel != "ALIPAY":
-            return
-        client = AlipayClient()
-        if not client.configured:
-            return
-        try:
-            await client.close_trade(out_trade_no=payment.payment_no)
-        except (httpx.HTTPError, AlipayConfigurationError, ValueError):
-            logger.warning(
-                "alipay_close_failed",
-                payment_no=payment.payment_no,
-            )
+        return order, await self.items.list_by_order(order.id)
 
     async def cancel_order(
         self,
@@ -306,16 +287,11 @@ class OrderService:
                 user_id=user_id,
                 order_no=order_no,
             )
-            if order.status != "PENDING_PAYMENT":
+            if order.status not in {"CREATED", "PENDING_PAYMENT"}:
                 raise ConflictException(
-                    message="Only pending-payment orders can be cancelled",
+                    message="Only unshipped CREATED orders can be cancelled",
                     code="ORDER_STATUS_CONFLICT",
                 )
-
-            payment = await self.payments.get_by_order(
-                order.id,
-                for_update=True,
-            )
             for item in sorted(items, key=lambda value: value.sku_id):
                 await self.inventory.release(
                     sku_id=item.sku_id,
@@ -325,65 +301,11 @@ class OrderService:
                     business_id=order.id,
                     business_item_id=item.id,
                 )
-
-            if payment is not None and payment.status == "PENDING":
-                payment.status = "CLOSED"
-                payment.closed_at = utc_now()
-                await self.payments.save(payment)
-
             order.status = "CANCELLED"
             order.cancelled_at = utc_now()
             order.cancel_reason = reason
             await self.orders.save(order)
-
-        await self._close_alipay_best_effort(payment)
         return await self._detail(order_no)
-
-    async def close_expired_orders(self) -> int:
-        expired = await self.orders.list_expired_pending()
-        closed = 0
-        for candidate in expired:
-            try:
-                async with transaction_context(self.session):
-                    order = await self.orders.get_by_id(
-                        candidate.id,
-                        for_update=True,
-                    )
-                    if (
-                        order is None
-                        or order.status != "PENDING_PAYMENT"
-                        or order.expires_at > utc_now()
-                    ):
-                        continue
-                    items = await self.items.list_by_order(order.id)
-                    payment = await self.payments.get_by_order(
-                        order.id,
-                        for_update=True,
-                    )
-                    for item in sorted(items, key=lambda value: value.sku_id):
-                        await self.inventory.release(
-                            sku_id=item.sku_id,
-                            quantity=item.quantity,
-                            idempotency_key=(
-                                f"order:{order.id}:line:{item.id}:release"
-                            ),
-                            business_type="ORDER",
-                            business_id=order.id,
-                            business_item_id=item.id,
-                        )
-                    if payment is not None and payment.status == "PENDING":
-                        payment.status = "CLOSED"
-                        payment.closed_at = utc_now()
-                        await self.payments.save(payment)
-                    order.status = "CLOSED"
-                    order.closed_at = utc_now()
-                    order.close_reason = "PAYMENT_TIMEOUT"
-                    await self.orders.save(order)
-                closed += 1
-            except ConflictException:
-                await self.session.rollback()
-                continue
-        return closed
 
     async def ship(
         self,
@@ -398,11 +320,27 @@ class OrderService:
                     message="Order not found",
                     code="ORDER_NOT_FOUND",
                 )
-            if order.status != "PAID" or order.fulfillment_status != "UNSHIPPED":
+            if (
+                order.status not in LEGACY_SHIPPABLE_STATUSES
+                or order.fulfillment_status != "UNSHIPPED"
+            ):
                 raise ConflictException(
                     message="Order cannot be shipped in its current state",
                     code="ORDER_STATUS_CONFLICT",
                 )
+            items = await self.items.list_by_order(order.id)
+            # New CREATED orders still hold a reservation. Legacy PAID orders
+            # already deducted stock during the retired payment flow.
+            if order.status == "CREATED":
+                for item in sorted(items, key=lambda value: value.sku_id):
+                    await self.inventory.deduct_reserved(
+                        sku_id=item.sku_id,
+                        quantity=item.quantity,
+                        idempotency_key=f"order:{order.id}:line:{item.id}:ship",
+                        business_type="ORDER",
+                        business_id=order.id,
+                        business_item_id=item.id,
+                    )
             order.fulfillment_status = "SHIPPED"
             order.shipping_carrier = request.shipping_carrier
             order.tracking_no = request.tracking_no
@@ -418,7 +356,10 @@ class OrderService:
                     message="Order not found",
                     code="ORDER_NOT_FOUND",
                 )
-            if order.status != "PAID" or order.fulfillment_status != "SHIPPED":
+            if (
+                order.status not in LEGACY_SHIPPABLE_STATUSES
+                or order.fulfillment_status != "SHIPPED"
+            ):
                 raise ConflictException(
                     message="Order cannot be delivered in its current state",
                     code="ORDER_STATUS_CONFLICT",
@@ -436,7 +377,10 @@ class OrderService:
                     message="Order not found",
                     code="ORDER_NOT_FOUND",
                 )
-            if order.status != "PAID" or order.fulfillment_status != "DELIVERED":
+            if (
+                order.status not in LEGACY_SHIPPABLE_STATUSES
+                or order.fulfillment_status != "DELIVERED"
+            ):
                 raise ConflictException(
                     message="Order cannot be completed in its current state",
                     code="ORDER_STATUS_CONFLICT",

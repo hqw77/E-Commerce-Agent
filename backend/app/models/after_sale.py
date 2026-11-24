@@ -1,3 +1,9 @@
+"""售后模型.
+
+after_sales 表示某个订单项的退款/退货/换货申请. 状态, 审核, 退货物流,
+换货物流和退款关联都集中在一条记录中, 便于追踪完整售后生命周期.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -28,10 +34,11 @@ if TYPE_CHECKING:
 
 
 class AfterSale(Base):
-    """After-sales request for one order item."""
+    """订单项级售后单, 支持退款, 退货和换货."""
 
     __tablename__ = "after_sales"
 
+    # 售后号唯一; user_id + idempotency_key 防重复申请.
     __table_args__ = (
         UniqueConstraint(
             "after_sales_no",
@@ -72,6 +79,7 @@ class AfterSale(Base):
         nullable=False,
     )
 
+    # 关联订单和订单项, 保证售后只能针对真实购买内容.
     order_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -105,11 +113,13 @@ class AfterSale(Base):
         nullable=False,
     )
 
+    # REFUND_ONLY/RETURN_REFUND/EXCHANGE 等售后类型, 决定后续状态分支.
     type: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
     )
 
+    # PENDING_REVIEW/REFUNDING/WAITING_RETURN/RETURN_SHIPPED/COMPLETED 等状态.
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -121,11 +131,13 @@ class AfterSale(Base):
         nullable=False,
     )
 
+    # 申请金额来自订单项行金额, 审核金额不允许超过申请金额.
     requested_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
     )
 
+    # 审核通过金额, 当前约束要求为空或等于申请金额.
     approved_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
@@ -141,6 +153,7 @@ class AfterSale(Base):
         nullable=True,
     )
 
+    # 用户提交的凭证链接, 仅作为售后审核材料, 不参与资金计算.
     evidence_urls: Mapped[list[str] | None] = mapped_column(
         JSON,
         nullable=True,
@@ -151,6 +164,7 @@ class AfterSale(Base):
         nullable=True,
     )
 
+    # 审核人和收货人分开记录, 便于审计责任链.
     reviewed_by: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -260,6 +274,7 @@ class AfterSale(Base):
         foreign_keys=[received_by],
     )
 
+    # 退款售后会关联一条 Refund; 退货/换货在退款前保持为空.
     refund: Mapped["Refund | None"] = relationship(
         back_populates="after_sale",
         uselist=False,

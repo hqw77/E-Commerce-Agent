@@ -1,4 +1,10 @@
 
+"""认证 API.
+
+这一层只负责 HTTP 协议和依赖注入, 具体的密码校验, Refresh 轮换和会话撤销
+全部委托给 AuthService/UserService. 这样认证规则不会散落在 Router 中.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
@@ -30,7 +36,7 @@ async def register_user(
     request: RegisterRequest,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
-    """Register a new user account."""
+    """注册新用户. 邮箱唯一性和密码哈希由 UserService 负责."""
     user_service = UserService(session)
 
     user = await user_service.register_user(
@@ -52,7 +58,8 @@ async def login(
     response: Response,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """Authenticate a user and issue access and refresh tokens."""
+    """登录并签发 Access/Refresh Token."""
+    # 登录响应包含 token, 禁止浏览器或中间代理缓存.
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
 
@@ -75,7 +82,7 @@ async def refresh_tokens(
     response: Response,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """Rotate a refresh token and issue a new token pair."""
+    """轮换 Refresh Token. 旧 token 被消费, 新 token 继续沿用同一 family."""
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
 
@@ -95,7 +102,7 @@ async def refresh_tokens(
 async def get_me(
     current_user: CurrentUser,
 ) -> UserResponse:
-    """Return the current authenticated user's public profile."""
+    """返回当前登录用户的公开资料. 用户身份来自 CurrentUser, 不接受请求体指定."""
     return UserResponse.model_validate(current_user)
 
 
@@ -109,7 +116,7 @@ async def logout(
     current_user: CurrentUser,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
-    """Revoke the current user's refresh-token session family."""
+    """退出登录并撤销当前 Refresh Token 所在的整个 family."""
     service = AuthService(session)
 
     await service.logout(

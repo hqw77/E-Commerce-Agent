@@ -1,3 +1,9 @@
+"""管理端库存 API.
+
+入库, 调整, 初始化等操作全部通过 InventoryService 写入库存流水.
+调用方必须提供 idempotency_key, 以支持安全重试.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -21,6 +27,7 @@ router = APIRouter()
 
 
 def _inventory_response(inventory) -> InventoryResponse:
+    """计算可用库存并生成响应, 库存账本字段不直接暴露给前端."""
     return InventoryResponse(
         sku_id=inventory.sku_id,
         total_quantity=inventory.total_quantity,
@@ -32,6 +39,7 @@ def _inventory_response(inventory) -> InventoryResponse:
 def _operation_response(
     result: InventoryOperationResult,
 ) -> InventoryOperationResponse:
+    """把库存操作结果和流水一起返回, 便于前端确认本次变更."""
     return InventoryOperationResponse(
         transaction=InventoryTransactionResponse.model_validate(result.transaction),
         inventory=_inventory_response(result.inventory),
@@ -48,6 +56,7 @@ async def get_inventory(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> InventoryResponse:
+    """查询 SKU 当前库存."""
     service = InventoryService(session)
     inventory = await service.get_inventory(sku_id)
     return _inventory_response(inventory)
@@ -64,6 +73,7 @@ async def initialize_inventory(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> InventoryOperationResponse:
+    """初始化库存. 只允许从未初始化过的 SKU 执行一次."""
     service = InventoryService(session)
     result = await service.initialize(
         sku_id=sku_id,
@@ -86,6 +96,7 @@ async def stock_in(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> InventoryOperationResponse:
+    """入库. 增加总库存并记录一条 STOCK_IN 流水."""
     service = InventoryService(session)
     result = await service.stock_in(
         sku_id=sku_id,
@@ -108,6 +119,7 @@ async def stock_out(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> InventoryOperationResponse:
+    """直接出库. 会校验可用库存, 不允许扣成负数."""
     service = InventoryService(session)
     result = await service.direct_outbound(
         sku_id=sku_id,
@@ -130,6 +142,7 @@ async def adjust_inventory(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> InventoryOperationResponse:
+    """按增量调整库存, 用于盘点或纠错."""
     service = InventoryService(session)
     result = await service.adjust(
         sku_id=sku_id,
@@ -153,6 +166,7 @@ async def list_transactions(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> InventoryTransactionListResponse:
+    """分页查询 SKU 库存流水, 用于审计每次数量变化."""
     service = InventoryService(session)
     items, total = await service.list_transactions(
         sku_id,

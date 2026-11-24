@@ -1,3 +1,9 @@
+"""管理端 SKU API.
+
+SKU 属性在创建后保持不变, 允许调整价格和上下架状态.
+价格变化不会回写历史订单, 订单项保存下单时的快照.
+"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path
@@ -22,7 +28,7 @@ async def update_sku(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> SkuResponse:
-    """Update SKU price or status; attributes are immutable."""
+    """更新 SKU 价格或状态. 属性不可变, 避免历史订单语义漂移."""
     service = SkuService(session)
     sku = await service.update_sku(
         sku_id,

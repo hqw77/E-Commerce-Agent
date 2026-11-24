@@ -1,3 +1,10 @@
+"""知识库 API.
+
+上传/发布/删除属于管理端操作, 列表/详情/检索属于用户端操作.
+文档内容会进入 RAG 链路, 但本层只负责文件接收和协议转换, 解析, 切分, 向量化
+和权限过滤由 KnowledgeDocumentService/KnowledgeRetrievalService 负责.
+"""
+
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile, status
@@ -29,6 +36,7 @@ DocumentStatusParam = Literal["ACTIVE", "ARCHIVED", "DELETED"]
 
 
 def _document_detail(document: object) -> DocumentDetailResponse:
+    """把文档及其版本列表组装成详情响应."""
     base = DocumentResponse.model_validate(document)
     versions = [
         VersionResponse.model_validate(version)
@@ -41,6 +49,7 @@ def _document_detail(document: object) -> DocumentDetailResponse:
 
 
 def _document_service(session: AsyncSession) -> KnowledgeDocumentService:
+    """按当前配置组装文档服务, 复用 Embedding 和 Qdrant 运行时组件."""
     settings = get_settings()
     return KnowledgeDocumentService(
         session,
@@ -65,6 +74,7 @@ async def upload_document(
     description: Annotated[str | None, Form()] = None,
     visibility: Annotated[DocumentVisibilityParam, Form()] = "PUBLIC",
 ) -> DocumentDetailResponse:
+    """上传知识文档. 只有管理员可以调用, 文件大小和类型由 Service 校验."""
     content = await file.read()
     service = _document_service(session)
     document = await service.create_document(
@@ -95,6 +105,7 @@ async def list_documents(
     ] = None,
     visibility: Annotated[DocumentVisibilityParam | None, Query()] = None,
 ) -> DocumentListResponse:
+    """分页查询当前用户可见的知识文档, PUBLIC/ADMIN_ONLY 由 Service 过滤."""
     service = _document_service(session)
     items, total = await service.list_documents(
         user=user,
@@ -122,6 +133,7 @@ async def get_document(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> DocumentDetailResponse:
+    """查看文档详情, 无权限或不存在的文档统一按 404 处理."""
     service = _document_service(session)
     document = await service.get_document(user=user, document_id=document_id)
     return _document_detail(document)
@@ -139,6 +151,7 @@ async def upload_version(
     admin: CurrentAdmin,
     file: Annotated[UploadFile, File()],
 ) -> DocumentDetailResponse:
+    """上传文档的新版本. 旧发布版本不会被新版本自动替换, 需要显式发布."""
     content = await file.read()
     service = _document_service(session)
     document = await service.create_version(
@@ -161,6 +174,7 @@ async def get_version(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> VersionResponse:
+    """查看单个版本的处理状态和元数据."""
     service = _document_service(session)
     version = await service.get_version(
         user=user,
@@ -181,6 +195,7 @@ async def publish_version(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> VersionResponse:
+    """发布一个已完成索引的版本. 发布后该版本成为检索可见版本."""
     service = _document_service(session)
     version = await service.publish_version(
         user=admin,
@@ -201,6 +216,7 @@ async def retry_version(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> VersionResponse:
+    """重试失败的版本处理. 只有失败状态允许重试."""
     service = _document_service(session)
     version = await service.retry_version(
         user=admin,
@@ -220,6 +236,7 @@ async def delete_document(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> None:
+    """删除文档. 软删除/关联数据清理由 Service 统一处理."""
     service = _document_service(session)
     await service.delete_document(user=admin, document_id=document_id)
 
@@ -234,6 +251,7 @@ async def retrieve(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> RetrievalResponse:
+    """检索知识片段. 返回原始 Top-K, 无答案策略只在 Agent 边界执行."""
     service = KnowledgeRetrievalService(
         session,
         get_settings(),

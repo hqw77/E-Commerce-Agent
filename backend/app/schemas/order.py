@@ -4,18 +4,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+# Legacy status values remain accepted for historical rows. New orders only use
+# CREATED, CANCELLED and COMPLETED.
 OrderStatus = Literal[
+    "CREATED",
     "PENDING_PAYMENT",
     "PAID",
     "CANCELLED",
     "CLOSED",
     "COMPLETED",
-]
-PaymentStatus = Literal[
-    "UNPAID",
-    "PAID",
-    "PARTIALLY_REFUNDED",
-    "REFUNDED",
 ]
 FulfillmentStatus = Literal["UNSHIPPED", "SHIPPED", "DELIVERED", "COMPLETED"]
 
@@ -75,11 +72,8 @@ class OrderResponse(BaseModel):
 
     order_no: str
     status: OrderStatus
-    payment_status: PaymentStatus
     fulfillment_status: FulfillmentStatus
     total_amount: Decimal
-    paid_amount: Decimal
-    refunded_amount: Decimal
     currency: str
     receiver_name: str
     receiver_phone: str
@@ -87,13 +81,10 @@ class OrderResponse(BaseModel):
     customer_remark: str | None
     shipping_carrier: str | None
     tracking_no: str | None
-    expires_at: datetime
-    paid_at: datetime | None
     shipped_at: datetime | None
     delivered_at: datetime | None
     completed_at: datetime | None
     cancelled_at: datetime | None
-    closed_at: datetime | None
     created_at: datetime
     items: list[OrderItemResponse] = Field(default_factory=list)
 
@@ -115,7 +106,3 @@ class CompleteOrderResponse(BaseModel):
     status: OrderStatus
     fulfillment_status: FulfillmentStatus
     completed_at: datetime | None
-
-
-class CloseExpiredResponse(BaseModel):
-    closed_count: int

@@ -1,3 +1,9 @@
+"""库存流水模型.
+
+inventory_transactions 是只追加的库存账本, 记录每次变更的增量, 变更后余额,
+业务来源和幂等键. 库存快照与流水必须同时更新, 否则无法审计和对账.
+"""
+
 from datetime import datetime
 
 from sqlalchemy import (
@@ -16,10 +22,11 @@ from app.db.base import Base
 
 
 class InventoryTransaction(Base):
-    """Append-only inventory ledger entry."""
+    """只追加的库存流水, 不允许原地修改历史记录."""
 
     __tablename__ = "inventory_transactions"
 
+    # 幂等键全局唯一, 是库存操作安全重试的最后防线.
     __table_args__ = (
         UniqueConstraint(
             "idempotency_key",
@@ -67,6 +74,7 @@ class InventoryTransaction(Base):
         autoincrement=True,
     )
 
+    # 流水归属 SKU, 与 inventory 的快照维度一致.
     sku_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -78,21 +86,25 @@ class InventoryTransaction(Base):
         nullable=False,
     )
 
+    # INITIAL/STOCK_IN/RESERVE/RELEASE/RESERVED_OUTBOUND 等操作类型.
     transaction_type: Mapped[str] = mapped_column(
         String(24),
         nullable=False,
     )
 
+    # 本次操作对总库存的增量, 预占/释放在这里通常为 0.
     total_delta: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
     )
 
+    # 本次操作对预占库存的增量, 用于还原当时的变化方向.
     reserved_delta: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
     )
 
+    # 操作后的余额快照, 便于审计时不依赖重放全部历史.
     total_after: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
@@ -108,6 +120,7 @@ class InventoryTransaction(Base):
         nullable=False,
     )
 
+    # 业务来源, 例如 MANUAL/ORDER/INITIAL, 用于追溯操作上下文.
     business_type: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

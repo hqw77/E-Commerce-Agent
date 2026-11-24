@@ -7,9 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 ORDER_PREFIX = "ORD"
-PAYMENT_PREFIX = "PAY"
 AFTER_SALES_PREFIX = "AS"
-REFUND_PREFIX = "RFD"
 
 
 def utc_now() -> datetime:
@@ -31,16 +29,8 @@ def new_order_no() -> str:
     return new_business_no(ORDER_PREFIX)
 
 
-def new_payment_no() -> str:
-    return new_business_no(PAYMENT_PREFIX)
-
-
 def new_after_sales_no() -> str:
     return new_business_no(AFTER_SALES_PREFIX)
-
-
-def new_refund_no() -> str:
-    return new_business_no(REFUND_PREFIX)
 
 
 def request_fingerprint(

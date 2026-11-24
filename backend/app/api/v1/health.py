@@ -1,4 +1,10 @@
 
+"""健康检查 API.
+
+/live 只代表进程存活, 供容器重启策略使用.
+/ready 额外检查 MySQL 和 Redis, 供流量接入判断使用.
+"""
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
@@ -13,25 +19,27 @@ router = APIRouter()
 
 @router.get("/live", summary="Liveness probe")
 async def health_live() -> dict[str, str]:
-    """Check whether the application process is alive."""
+    """进程存活探针. 不访问数据库, 避免依赖故障导致容器被误杀."""
     return {"status": "ok"}
 
 
 @router.get("/ready", summary="Readiness probe")
 async def health_ready() -> JSONResponse:
-    """Check whether critical application dependencies are available."""
+    """就绪探针. 只有数据库和 Redis 都可用时才允许接收业务流量."""
 
     checks = {
         "database": "ok",
         "redis": "ok",
     }
 
+    # 用最小 SQL 验证连接池能否拿到可用连接.
     try:
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
     except SQLAlchemyError:
         checks["database"] = "error"
 
+    # PING 验证 Redis 客户端和连接池状态.
     try:
         await redis_client.ping()
     except RedisError:
