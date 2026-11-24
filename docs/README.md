@@ -1,46 +1,65 @@
-# E-Commerce Agent 项目文档中心
+# 清风数码 E-Commerce Agent 面试文档
 
-> 项目定位: 本地完成度较高的全栈电商 AI Agent 工程实践项目。  
-> 当前基线: `main` / `c732cc1`。  
-> 当前阶段: TASK-023-FINAL 本地收尾。
+> 一套面向面试讲解的当前项目文档。
+> 只记录已经实现的能力，不把设计稿、历史计划当功能。
 
-## 快速入口
-
-- [项目总览](00-project-overview/README.md)
-- [前端架构](01-frontend/README.md)
-- [后端架构](02-backend/README.md)
-- [Agent 架构](03-agent/README.md)
-- [公共环境](04-common/README.md)
-- [前后端集成](05-integration/README.md)
-- [测试与验收](06-testing/README.md)
-- [项目管理](07-project-management/README.md)
-- [架构决策](08-architecture-decisions/README.md)
-- [历史归档](09-archive/README.md)
-- [学习资料](10-learning/README.md)
-
-## 项目能力
-
-- 本地电商业务: 认证、商品、SKU、库存、订单、MOCK 支付、退款、售后、知识库。
-- Agent: GENERAL、RAG、TOOL、WORKFLOW、UNSUPPORTED 五路路由。
-- 安全: READ Tool 与 PREPARE Tool 分离, 独立 Confirm API, ACL, Source 服务端构造, Prompt Injection signal, Trace 脱敏。
-- RAG: BGE-M3、Qdrant、MySQL 权威 Chunk、PUBLIC/ADMIN_ONLY、无答案策略。
-- 前端: React 管理后台和 Agent 聊天。
-
-## 当前状态边界
+## 推荐阅读顺序
 
 ```text
-已完成: TASK-001～016 本地业务与基础部署资料
-已完成: TASK-019/020/020.A Agent 架构与 E2E
-已完成: TASK-021.0/021.1
-待人工验收: TASK-021.2
-暂缓: TASK-017/018
-未开始/范围待定义: TASK-021.3、TASK-022
+01 项目总览
+02 整体架构
+03 核心业务流程
+04 Agent 与 RAG
+05 数据模型与 API
+06 测试与质量
+07 面试问答
+08 现场演示脚本
 ```
 
-## 文档原则
+## 文档索引
 
-1. 当前说明以源码和本轮测试为准。
-2. 历史 TASK 报告不删除、不改写, 由 [历史归档](09-archive/README.md) 建立来源索引。
-3. 未验证的测试和环境状态必须明确标注。
-4. 不把本地 MOCK 支付描述为真实支付宝联调。
-5. 不把 TASK-021.2 的离线小样本指标描述为生产认证。
+- [01 项目总览](01-project-overview.md)
+- [02 整体架构](02-architecture.md)
+- [03 核心业务流程](03-business-flows.md)
+- [04 Agent 与 RAG](04-agent-and-rag.md)
+- [05 数据模型与 API](05-data-and-api.md)
+- [06 测试与质量](06-testing-and-quality.md)
+- [07 面试问答](07-interview-qa.md)
+- [08 现场演示脚本](08-demo-script.md)
+
+## 项目一句话
+
+一个本地可运行的双端电商智能体 MVP：
+
+```text
+消费者商城 + AI 导购/客服 + 运营后台
+```
+
+## 当前基线
+
+```text
+商品：10 个（P001–P010）
+SKU：10 个
+分类：4 个
+订单：12 个
+售后：4 个
+支付/退款：0
+```
+
+## 相关入口
+
+- [项目 README](../README.md)
+- [后端 API 文档](http://127.0.0.1:8000/docs)
+- [商城](http://127.0.0.1:5173/shop)
+- [运营后台](http://127.0.0.1:5173/dashboard)
+
+## 边界
+
+```text
+未实现购物车
+未实现支付
+未实现普通用户地址簿
+未做生产部署、HTTPS 和正式运维
+```
+
+阅读时请以源码和实际测试结果为准。

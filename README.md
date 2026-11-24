@@ -509,15 +509,15 @@ RAG 评测是小样本，无答案阈值不是生产认证
 
 ## 文档
 
-- [项目文档索引](docs/README.md)
-- [项目总览](docs/00-project-overview/README.md)
-- [前端](docs/01-frontend/README.md)
-- [后端](docs/02-backend/README.md)
-- [Agent](docs/03-agent/README.md)
-- [集成契约](docs/05-integration/README.md)
-- [测试与验收](docs/06-testing/README.md)
-- [架构决策](docs/08-architecture-decisions/README.md)
-- [商品管理优化报告](docs/03-delivery/TASK-024-商品管理优化报告.md)
+- [面试文档索引](docs/README.md)
+- [项目总览](docs/01-project-overview.md)
+- [整体架构](docs/02-architecture.md)
+- [核心业务流程](docs/03-business-flows.md)
+- [Agent 与 RAG](docs/04-agent-and-rag.md)
+- [数据模型与 API](docs/05-data-and-api.md)
+- [测试与质量](docs/06-testing-and-quality.md)
+- [面试问答](docs/07-interview-qa.md)
+- [现场演示脚本](docs/08-demo-script.md)
 
 ---
 
