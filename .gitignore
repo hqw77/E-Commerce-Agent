@@ -30,6 +30,7 @@ htmlcov/
 
 # RAG local data
 storage/knowledge/
+storage/test_knowledge/
 
 # Logs
 *.log
@@ -40,3 +41,5 @@ storage/knowledge/
 # OS
 .DS_Store
 Thumbs.db
+frontend/.tmp-build/
+frontend/dist/

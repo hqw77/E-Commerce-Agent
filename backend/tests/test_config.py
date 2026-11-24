@@ -4,7 +4,12 @@ from app.core.config import Settings, get_settings
 from pydantic import ValidationError
 
 
-def test_default_settings():
+def test_default_settings(monkeypatch):
+    # The project test runner forces isolated test resources through
+    # environment variables. This test intentionally verifies the model's
+    # built-in defaults, so remove only those overrides for this case.
+    for key in ("APP_ENV", "MYSQL_PORT", "REDIS_PORT"):
+        monkeypatch.delenv(key, raising=False)
     config = Settings(_env_file=None)
 
     assert config.app_name == "E-Commerce Agent"
