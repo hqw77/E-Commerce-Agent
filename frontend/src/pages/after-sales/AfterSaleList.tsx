@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { listAfterSales } from '../../api/afterSales';
 import { PageHeader, StatusTag } from '../../components/Common';
 import { errorMessage } from '../../utils/error';
-import { formatDate, formatMoney } from '../../utils/format';
+import { formatDate } from '../../utils/format';
 import type { AfterSale } from '../../types/afterSales';
 
 export function AfterSaleListPage() {
@@ -21,7 +21,7 @@ export function AfterSaleListPage() {
     <div className="page-stack">
       <PageHeader
         title="售后管理"
-        subtitle="售后状态由 AfterSaleService 管理，PENDING_REVIEW 不代表审核或退款成功"
+        subtitle="售后状态由 AfterSaleService 管理，当前仅支持换货"
       />
       {query.error ? <Alert type="error" showIcon message={errorMessage(query.error)} /> : null}
       <Card className="soft-card">
@@ -42,8 +42,8 @@ export function AfterSaleListPage() {
               setPage(1);
             }}
             options={[
-              'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED', 'WAITING_RETURN',
-              'RETURN_SHIPPED', 'RECEIVED', 'REFUNDING', 'REFUND_FAILED', 'COMPLETED',
+              'PENDING_REVIEW', 'REJECTED', 'CANCELLED', 'WAITING_RETURN',
+              'RETURN_SHIPPED', 'RECEIVED', 'COMPLETED',
             ].map((value) => ({ value, label: value }))}
           />
         </Space>
@@ -73,13 +73,12 @@ export function AfterSaleListPage() {
             { title: 'SKU', dataIndex: 'sku_code' },
             { title: '类型', dataIndex: 'type' },
             { title: '状态', dataIndex: 'status', render: (value: string) => <StatusTag status={value} /> },
-            { title: '申请金额', dataIndex: 'requested_amount', render: (value: string) => formatMoney(value) },
             { title: '原因', dataIndex: 'reason' },
             { title: '申请时间', dataIndex: 'created_at', render: formatDate },
           ]}
         />
         <Typography.Text type="secondary">
-          售后审核与退款由管理员后端接口执行；本页面不提供前端自行批准。
+          售后审核、收货和换货补发由管理员后端接口执行；本页面不提供前端自行批准。
         </Typography.Text>
       </Card>
     </div>

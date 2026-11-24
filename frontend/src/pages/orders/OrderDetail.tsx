@@ -39,18 +39,17 @@ export function OrderDetailPage() {
       <Card className="soft-card" title="订单信息">
         <Descriptions column={2} bordered size="middle">
           <Descriptions.Item label="订单状态"><StatusTag status={order.status} /></Descriptions.Item>
-          <Descriptions.Item label="支付状态"><StatusTag status={order.payment_status} /></Descriptions.Item>
           <Descriptions.Item label="履约状态"><StatusTag status={order.fulfillment_status} /></Descriptions.Item>
           <Descriptions.Item label="金额">{formatMoney(order.total_amount)}</Descriptions.Item>
-          <Descriptions.Item label="已支付">{formatMoney(order.paid_amount)}</Descriptions.Item>
-          <Descriptions.Item label="已退款">{formatMoney(order.refunded_amount)}</Descriptions.Item>
+          <Descriptions.Item label="币种">{order.currency}</Descriptions.Item>
           <Descriptions.Item label="收货人">{order.receiver_name}</Descriptions.Item>
           <Descriptions.Item label="联系电话">{order.receiver_phone}</Descriptions.Item>
           <Descriptions.Item label="收货地址" span={2}>{order.receiver_address}</Descriptions.Item>
           <Descriptions.Item label="创建时间">{formatDate(order.created_at)}</Descriptions.Item>
-          <Descriptions.Item label="支付时间">{formatDate(order.paid_at)}</Descriptions.Item>
           <Descriptions.Item label="发货时间">{formatDate(order.shipped_at)}</Descriptions.Item>
           <Descriptions.Item label="送达时间">{formatDate(order.delivered_at)}</Descriptions.Item>
+          <Descriptions.Item label="完成时间">{formatDate(order.completed_at)}</Descriptions.Item>
+          <Descriptions.Item label="取消时间">{formatDate(order.cancelled_at)}</Descriptions.Item>
           <Descriptions.Item label="承运商">{order.shipping_carrier ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="运单号">{order.tracking_no ?? '-'}</Descriptions.Item>
         </Descriptions>
@@ -71,13 +70,13 @@ export function OrderDetailPage() {
           ]}
         />
       </Card>
-      <Card className="soft-card" title="支付与售后">
+      <Card className="soft-card" title="履约与售后">
         <Space direction="vertical">
           <Typography.Text>
-            支付渠道与支付单编号需要调用 Payment 接口查询；本页只展示订单的权威支付状态，不在前端判断支付成功。
+            本版本已移除支付和资金退款能力。订单创建后为 CREATED，可取消、发货、送达和完成。
           </Typography.Text>
           <Typography.Text type="secondary">
-            售后记录可从售后管理页面查看；申请和审核由后端完成。
+            售后仅支持换货；售后申请和审核由后端管理端流程完成。
           </Typography.Text>
         </Space>
       </Card>

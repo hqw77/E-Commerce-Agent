@@ -1,3 +1,5 @@
+// Legacy types are accepted for reading historical records; new applications
+// are EXCHANGE only.
 export type AfterSaleType = 'REFUND_ONLY' | 'RETURN_REFUND' | 'EXCHANGE';
 
 export interface AfterSale {

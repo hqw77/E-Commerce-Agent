@@ -22,7 +22,7 @@ export function OrderListPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="订单管理" subtitle="订单状态、金额与支付状态均以后端返回为准" />
+      <PageHeader title="订单管理" subtitle="订单状态、金额与履约状态均以后端返回为准" />
       {query.error ? <Alert type="error" showIcon message={errorMessage(query.error)} /> : null}
       <Card className="soft-card">
         <Space wrap className="filter-row">
@@ -41,7 +41,7 @@ export function OrderListPage() {
               setStatus(value);
               setPage(1);
             }}
-            options={['PENDING_PAYMENT', 'PAID', 'CANCELLED', 'CLOSED', 'COMPLETED'].map(
+            options={['CREATED', 'CANCELLED', 'CLOSED', 'COMPLETED'].map(
               (value) => ({ value, label: value }),
             )}
           />
@@ -64,7 +64,7 @@ export function OrderListPage() {
               render: (value: string) => <Link to={`/orders/${value}`}>{value}</Link>,
             },
             { title: '订单状态', dataIndex: 'status', render: (value: string) => <StatusTag status={value} /> },
-            { title: '支付状态', dataIndex: 'payment_status', render: (value: string) => <StatusTag status={value} /> },
+            { title: '履约状态', dataIndex: 'fulfillment_status', render: (value: string) => <StatusTag status={value} /> },
             { title: '金额', dataIndex: 'total_amount', render: (value: string) => formatMoney(value) },
             { title: '收货人', dataIndex: 'receiver_name' },
             { title: '创建时间', dataIndex: 'created_at', render: formatDate },

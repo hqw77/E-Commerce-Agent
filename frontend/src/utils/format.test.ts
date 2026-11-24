@@ -13,7 +13,7 @@ describe('format helpers', () => {
   });
 
   it('maps backend statuses to semantic colors', () => {
-    expect(statusColor('PENDING_PAYMENT')).toBe('orange');
+    expect(statusColor('CREATED')).toBe('orange');
     expect(statusColor('ACTIVE')).toBe('green');
     expect(statusColor('UNKNOWN')).toBe('default');
   });

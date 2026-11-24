@@ -2,6 +2,7 @@ import {
   ApartmentOutlined,
   AppstoreOutlined,
   BarcodeOutlined,
+  BugOutlined,
   DashboardOutlined,
   FileTextOutlined,
   LogoutOutlined,
@@ -26,6 +27,7 @@ const items = [
   { key: '/after-sales', icon: <ProfileOutlined />, label: <Link to="/after-sales">售后管理</Link> },
   { key: '/knowledge', icon: <FileTextOutlined />, label: <Link to="/knowledge">知识库</Link> },
   { key: '/agent', icon: <MessageOutlined />, label: <Link to="/agent">AI Agent</Link> },
+  { key: '/agent/debug', icon: <BugOutlined />, label: <Link to="/agent/debug">Agent Trace</Link> },
 ];
 
 function selectedKey(pathname: string): string {
@@ -35,6 +37,7 @@ function selectedKey(pathname: string): string {
   if (pathname.startsWith('/orders')) return '/orders';
   if (pathname.startsWith('/after-sales')) return '/after-sales';
   if (pathname.startsWith('/knowledge')) return '/knowledge';
+  if (pathname.startsWith('/agent/debug')) return '/agent/debug';
   if (pathname.startsWith('/agent')) return '/agent';
   return '/dashboard';
 }

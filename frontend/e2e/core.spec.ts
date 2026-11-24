@@ -49,11 +49,18 @@ test.describe('admin core pages', () => {
     await expect(page.getByRole('heading', { name: '库存管理' })).toBeVisible();
     await expect(page.getByText(fixture.sku.sku_code).first()).toBeVisible();
 
+    await page.getByRole('button', { name: /入\s*库/ }).first().click();
+    const inventoryDialog = page.getByRole('dialog');
+    await expect(inventoryDialog).toBeVisible();
+    await inventoryDialog.getByRole('spinbutton').fill('1');
+    await inventoryDialog.getByRole('button', { name: /确\s*定/ }).click();
+    await expect(page.getByText(/库存操作已/)).toBeVisible({ timeout: 30_000 });
+
     await page.goto('/orders');
     await expect(page.getByRole('heading', { name: '订单管理' })).toBeVisible();
     await page.getByRole('link', { name: fixture.order.order_no }).click();
     await expect(page.getByRole('heading', { name: new RegExp(fixture.order.order_no) })).toBeVisible();
-    await expect(page.getByText('支付状态').first()).toBeVisible();
+    await expect(page.getByText('履约状态').first()).toBeVisible();
 
     await page.goto('/after-sales');
     await expect(page.getByRole('heading', { name: '售后管理' })).toBeVisible();

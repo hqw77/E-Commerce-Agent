@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { ChatResponse, ConfirmActionResponse } from '../types/agent';
+import type { ChatResponse, ConfirmActionResponse, TraceRun } from '../types/agent';
 
 export async function chat(payload: {
   message: string;
@@ -20,5 +20,10 @@ export async function confirmAction(
     payload,
     { timeout: 60000 },
   );
+  return response.data;
+}
+
+export async function getTraceRun(traceId: string): Promise<TraceRun> {
+  const response = await api.get<TraceRun>(`/agent/runs/${encodeURIComponent(traceId)}`);
   return response.data;
 }

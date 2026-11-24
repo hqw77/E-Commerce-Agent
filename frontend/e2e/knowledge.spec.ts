@@ -14,10 +14,10 @@ test('knowledge version publish and non-empty retrieval', async ({ page }) => {
   await page.goto(`/knowledge/${fixture.knowledge.document_id}`);
   await expect(page.getByText('文档信息')).toBeVisible();
 
-  const publish = page.getByRole('button', { name: '发布' });
+  const publish = page.getByRole('button', { name: /发\s*布/ });
   if (await publish.count()) {
     await publish.first().click();
-    await expect(page.getByText('版本已发布')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/版本已发布/)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('PUBLISHED').first()).toBeVisible({ timeout: 30_000 });
   }
 
@@ -35,5 +35,5 @@ test('knowledge version publish and non-empty retrieval', async ({ page }) => {
   const query = page.getByPlaceholder('输入问题，调用真实 /knowledge/retrieve');
   await query.fill('TASK014 退款申请窗口是多少天？');
   await page.getByRole('dialog').getByRole('button', { name: /检\s*索/ }).click();
-  await expect(page.getByText(/TASK0\d+-KB/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('dialog').getByText(/TASK0\d+-KB/).first()).toBeVisible({ timeout: 30_000 });
 });

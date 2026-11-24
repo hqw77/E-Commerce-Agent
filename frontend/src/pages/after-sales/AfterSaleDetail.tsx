@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getAfterSale } from '../../api/afterSales';
 import { PageHeader, StatusTag } from '../../components/Common';
 import { errorMessage } from '../../utils/error';
-import { formatDate, formatMoney } from '../../utils/format';
+import { formatDate } from '../../utils/format';
 
 export function AfterSaleDetailPage() {
   const { afterSalesNo } = useParams();
@@ -24,7 +24,7 @@ export function AfterSaleDetailPage() {
     <div className="page-stack">
       <PageHeader
         title={`售后 ${item.after_sales_no}`}
-        subtitle="售后申请与审核、退款是不同阶段"
+        subtitle="售后申请与审核是不同阶段；当前仅支持换货"
         extra={<Button onClick={() => navigate('/after-sales')}>返回列表</Button>}
       />
       <Card className="soft-card" title="售后信息">
@@ -34,10 +34,6 @@ export function AfterSaleDetailPage() {
           <Descriptions.Item label="关联订单">{item.order_no}</Descriptions.Item>
           <Descriptions.Item label="SKU">{item.sku_code}</Descriptions.Item>
           <Descriptions.Item label="数量">{item.quantity}</Descriptions.Item>
-          <Descriptions.Item label="申请金额">{formatMoney(item.requested_amount)}</Descriptions.Item>
-          <Descriptions.Item label="审核金额">
-            {item.approved_amount ? formatMoney(item.approved_amount) : '-'}
-          </Descriptions.Item>
           <Descriptions.Item label="申请原因">{item.reason}</Descriptions.Item>
           <Descriptions.Item label="描述" span={2}>{item.description ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="证据" span={2}>
@@ -56,12 +52,12 @@ export function AfterSaleDetailPage() {
           type="info"
           showIcon
           message="申请已提交，等待审核"
-          description="当前状态不代表审核通过，也不代表已退款。"
+          description="当前状态不代表审核通过，也不代表已换货。"
         />
       ) : null}
       <Card className="soft-card" title="流程说明">
         <Space direction="vertical">
-          <Typography.Text>售后审核、收货、退款和换货补发由后端管理端流程完成。</Typography.Text>
+          <Typography.Text>售后审核、收货和换货补发由后端管理端流程完成。</Typography.Text>
           <Typography.Text type="secondary">
             本页面只读展示；前端不提供越权的审核或退款按钮。
           </Typography.Text>

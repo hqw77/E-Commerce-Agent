@@ -1,6 +1,7 @@
 import { RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
 import { Alert, App, Avatar, Button, Input, Spin, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { chat, confirmAction } from '../../api/agent';
 import type { ChatResponse, PendingAction, Source } from '../../types/agent';
 import { errorMessage } from '../../utils/error';
@@ -16,12 +17,13 @@ interface ChatItem {
   sources?: Source[];
   pendingAction?: PendingAction | null;
   confirmationResult?: string;
+  traceId?: string | null;
 }
 
 const quickPrompts = [
   '查询最近的订单',
-  '退款需要满足什么条件？',
-  '帮我取消待支付订单',
+  '换货需要满足什么条件？',
+  '帮我取消未发货订单',
   '查询我的售后记录',
 ];
 
@@ -64,6 +66,7 @@ export function AgentChatPage() {
           createdAt: response.created_at,
           sources: response.sources,
           pendingAction: response.pending_action,
+          traceId: response.trace_id,
         },
       ]);
     } catch (error) {
@@ -185,6 +188,11 @@ export function AgentChatPage() {
                     ) : null}
                   </div>
                   <Typography.Paragraph className="chat-answer">{item.content}</Typography.Paragraph>
+                  {item.traceId ? (
+                    <Typography.Text type="secondary" className="agent-trace-link">
+                      trace: <Link to={`/agent/debug?trace_id=${item.traceId}`}>{item.traceId}</Link>
+                    </Typography.Text>
+                  ) : null}
                   {item.sources?.length ? <SourceList sources={item.sources} /> : null}
                   {item.pendingAction ? (
                     <PendingActionCard
