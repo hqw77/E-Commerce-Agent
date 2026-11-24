@@ -1,0 +1,130 @@
+{
+  "trace_ids": {
+    "general": "c0a376b53140496eb6b6ba045b73c32e",
+    "rag": "ed3810d4e8cd4b6da62ee913d901d8db",
+    "tool": "969316f20b07452aa5a1fac4ad4147e7",
+    "workflow": "e1ac7b9e423846c1aad02d055d76454f",
+    "admin_general": "0d796ae0d4b64a41bc226a8f8660c5de"
+  },
+  "responses": {
+    "general": {
+      "source_count": 0,
+      "pending": false
+    },
+    "rag": {
+      "source_count": 1,
+      "pending": false
+    },
+    "tool": {
+      "source_count": 0,
+      "pending": false
+    },
+    "workflow": {
+      "source_count": 0,
+      "pending": true
+    },
+    "admin_general": {
+      "source_count": 0,
+      "pending": false
+    }
+  },
+  "debug_permissions": {
+    "owner_user": 200,
+    "admin_view_user": 200,
+    "user_view_admin": 404,
+    "admin_view_admin": 200,
+    "unknown": 404
+  },
+  "order_no_for_workflow": "ORD20261117121408F52FB009",
+  "event_types": {
+    "general": [
+      "request_start",
+      "safety_input",
+      "node_start",
+      "node_end",
+      "node_start",
+      "route_decision",
+      "node_end",
+      "node_start",
+      "node_end",
+      "node_start",
+      "output_validation",
+      "node_end",
+      "node_start",
+      "conversation_saved",
+      "node_end",
+      "request_end"
+    ],
+    "rag": [
+      "request_start",
+      "safety_input",
+      "node_start",
+      "node_end",
+      "node_start",
+      "route_decision",
+      "node_end",
+      "node_start",
+      "rag_retrieval",
+      "node_end",
+      "node_start",
+      "node_end",
+      "node_start",
+      "output_validation",
+      "node_end",
+      "node_start",
+      "conversation_saved",
+      "node_end",
+      "request_end"
+    ],
+    "tool": [
+      "request_start",
+      "safety_input",
+      "node_start",
+      "node_end",
+      "node_start",
+      "route_decision",
+      "node_end",
+      "node_start",
+      "tool_plan",
+      "node_end",
+      "node_start",
+      "tool_start",
+      "tool_end",
+      "node_end",
+      "node_start",
+      "node_end",
+      "node_start",
+      "output_validation",
+      "node_end",
+      "node_start",
+      "conversation_saved",
+      "node_end",
+      "request_end"
+    ],
+    "workflow": [
+      "request_start",
+      "safety_input",
+      "node_start",
+      "node_end",
+      "node_start",
+      "route_decision",
+      "node_end",
+      "node_start",
+      "tool_plan",
+      "node_end",
+      "node_start",
+      "tool_start",
+      "tool_end",
+      "node_end",
+      "node_start",
+      "node_end",
+      "node_start",
+      "output_validation",
+      "node_end",
+      "node_start",
+      "conversation_saved",
+      "node_end",
+      "request_end"
+    ]
+  }
+}

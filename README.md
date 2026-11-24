@@ -1,133 +1,135 @@
 # E-Commerce Agent
 
-基于 Python 3.12、FastAPI 和大语言模型技术构建的电商 AI Agent 工程实践项目。目标是把真实电商业务系统与 RAG 知识检索、LangGraph Agent、Tool Calling 和安全控制结合起来，形成一个可运行、可测试、可解释的应用。
+本地全栈电商 AI Agent 项目。目标是把真实电商业务与 LangGraph、RAG、Tool Calling、Prepare/Confirm 和 Trace/Safety 结合起来, 形成可运行、可测试、可解释的工程实践项目。
 
-## 当前进度
+> 这是本地开发/求职作品项目, 不是已上线生产系统。  
+> 不包含云部署、域名、HTTPS 和生产备份恢复。
 
-| TASK | 内容 | 状态 |
-|---|---|---|
-| TASK-001 | 基础设施 | 已完成 |
-| TASK-002 | 用户认证 | 已完成 |
-| TASK-003 | 商品与库存 | 已完成 |
-| TASK-004 | 订单、支付与售后 | 业务代码与自动化验收完成；支付宝沙箱真实 E2E 延期至 TASK-015 |
-| TASK-005 | RAG 知识库 | 代码实现与自动化验收完成，待人工验收 |
-| TASK-006 | LangGraph Agent 核心 | 代码实现与自动化验收完成，待人工验收 |
-| TASK-007 | Agent 与电商业务工具集成 | 代码实现与自动化验收完成，待人工验收 |
-| TASK-008～013 | React 管理后台 | 代码实现、构建与前端验收完成，待人工验收 |
-| TASK-014 | 前后端联调 | 代码实现与自动化验收完成，待人工验收 |
-| TASK-015 | E2E、安全测试与 AI 评估 | 自动化实现完成；真实沙箱和部分 AI 评估未验证 |
-| TASK-016 | 生产级 Docker Compose | 本地生产化验收完成；真实支付/HTTPS 未验证 |
-| TASK-017～018 | 云部署与收尾 | 尚未开始 |
+## 项目能力
 
-TASK-004 已完成订单、库存、MOCK 支付、支付宝适配器、退款和售后业务流程；自动化测试 267 passed，Ruff、Mypy、Alembic 检查通过。
-
-支付宝沙箱真实支付、退款、异步通知和退款查询尚未验证，不能描述为已通过。
+- 认证、JWT Access/Refresh、退出;
+- 分类、商品、SKU;
+- 库存查询、入库、调整、流水;
+- 订单创建、取消、发货、送达、完成;
+- 简化售后: EXCHANGE 换货;
+- 知识库上传、解析、Chunk、BGE-M3、Qdrant、发布、检索;
+- Agent GENERAL/RAG/TOOL/WORKFLOW/UNSUPPORTED;
+- READ Tool、PREPARE Tool、独立 Confirm;
+- RAG ACL、Source 服务端构造、无答案策略;
+- Safety、Trace、Debug API。
 
 ## 技术栈
 
-- Python 3.12、FastAPI、Pydantic v2；
-- SQLAlchemy 2.x Async、MySQL 8、Alembic；
-- Redis 7；
-- LangChain、LangGraph；
-- React 18 + TypeScript + Vite + Ant Design；
-- Docker Compose、Nginx、云服务器 HTTPS（后续部署阶段）。
-
-## 核心架构约束
-
 ```text
-Agent → Tool → Service → Repository → Database
+Backend:  Python 3.12, FastAPI, Pydantic v2, 异步 SQLAlchemy
+Data:     MySQL 8, Redis 7, Qdrant
+Agent:    LangGraph, LangChain Core/ChatOpenAI, BGE-M3
+Frontend: React 18, TypeScript, Vite, Ant Design
+Quality:  Pytest, Vitest, Playwright, Ruff, Mypy, Alembic
 ```
 
-- Agent 不直接访问数据库；
-- Tool 必须调用业务 Service，不绕过权限和业务规则；
-- RAG 提供知识，不替代商品、库存、订单等实时业务查询；
-- 高风险业务操作需要人工确认和后端二次校验；
-- 不采用微服务、Kubernetes、多租户、自研 MQ 或独立安全平台。
-
-## 设计文档
-
-- [V1.2 项目总体规划](docs/02-design/V1.2-项目总体规划.md)
-- [系统总体架构](docs/02-design/系统总体架构.md)
-- [AI Agent 总体设计](docs/02-design/AI-Agent-总体设计.md)
-- [AI Agent 安全设计基线](docs/architecture.md)
-- [TASK-003.1 商品与库存设计](docs/product-design.md)
-- [TASK-004.1 订单支付售后设计](docs/02-design/TASK-004.1-订单支付售后设计.md)
-- [TASK-006 LangGraph Agent 核心设计](docs/02-design/TASK-006-LangGraph-Agent-核心设计.md)
-- [TASK-007 Agent 业务工具集成设计](docs/02-design/TASK-007-Agent-业务工具集成设计.md)
-- [TASK-008～013 React 前端整体设计](docs/02-design/TASK-008-013-前端整体设计.md.md)
-- [TASK-008～013 前端阶段交付报告](docs/03-delivery/TASK-008-013/TASK-008-013-前端阶段交付报告.md)
-- [TASK-014 前后端联调设计](docs/02-design/TASK-014-前后端联调设计.md)
-- [TASK-014 最终验收报告](docs/03-delivery/TASK-014/TASK-014-最终验收报告.md)
-- [项目总进度](docs/PROJECT-STATUS.md)
-- [TASK-004 最终交付记录](docs/03-delivery/TASK-004/TASK-004-final-delivery.md)
-- [TASK-005 RAG 最终交付记录](docs/03-delivery/TASK-005/TASK-005-final-delivery.md)
-- [支付宝沙箱 E2E 清单](docs/03-delivery/TASK-004/alipay-sandbox-e2e.md)
-
-## 项目结构
+## 架构
 
 ```text
-backend/        FastAPI、业务 Service、Repository、Model、Alembic、Backend 测试
-agent/          LangGraph、Tool、Prompt、Prepare/Confirm、Agent 测试
-frontend/       React + TypeScript 管理后台
-docs/           设计与交付文档
-deploy/         部署预留目录
+React
+→ FastAPI /api/v1
+→ AgentRuntime
+→ LangGraph
+→ RAG / READ Tool / PREPARE Workflow
+→ Backend Service
+→ MySQL / Redis / Qdrant
 ```
 
-## 本地运行
+核心安全约束:
 
-后端（项目根目录执行）：
+- Agent 不直接访问数据库;
+- LLM 不能决定权限;
+- PREPARE 只生成 Redis pending, 真正执行走独立 Confirm API;
+- ACL 在 RAG 检索前过滤;
+- Source 由服务端构造;
+- RAG 内容属于 untrusted content。
+
+## 文档
+
+完整文档入口: [docs/README.md](docs/README.md)
+
+- [项目总览](docs/00-project-overview/README.md)
+- [前端](docs/01-frontend/README.md)
+- [后端](docs/02-backend/README.md)
+- [Agent](docs/03-agent/README.md)
+- [公共环境](docs/04-common/README.md)
+- [集成契约](docs/05-integration/README.md)
+- [测试与验收](docs/06-testing/README.md)
+- [项目管理](docs/07-project-management/README.md)
+- [架构决策](docs/08-architecture-decisions/README.md)
+- [历史归档](docs/09-archive/README.md)
+- [学习资料](docs/10-learning/README.md)
+
+## 本地启动
+
+开发数据默认使用 MySQL 3307, Redis 6380, Qdrant 6333。
 
 ```powershell
 $env:PYTHONPATH="$PWD\backend;$PWD"
+$env:MYSQL_HOST="127.0.0.1"
+$env:MYSQL_PORT="3307"
+$env:REDIS_HOST="127.0.0.1"
+$env:REDIS_PORT="6380"
+$env:RAG_QDRANT_URL="http://127.0.0.1:6333"
 .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-后端测试（项目根目录执行）：
+```powershell
+cd frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+健康检查:
+
+```text
+http://127.0.0.1:8000/api/v1/health/live
+http://127.0.0.1:8000/api/v1/health/ready
+http://127.0.0.1:5173/
+```
+
+## 测试
 
 ```powershell
+.venv\Scripts\ruff.exe check backend/app agent
+.venv\Scripts\mypy.exe backend/app agent --exclude 'agent/tests' --exclude 'backend/tests'
+.venv\Scripts\python.exe -m alembic -c backend/alembic.ini check
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-Alembic（项目根目录执行）：
-
 ```powershell
-.venv\Scripts\python.exe -m alembic -c backend/alembic.ini current
-.venv\Scripts\python.exe -m alembic -c backend/alembic.ini check
-```
-
-RAG CLI（项目根目录执行）：
-
-```powershell
-$env:PYTHONPATH="$PWD\backend;$PWD"
-.venv\Scripts\python.exe -m app.rag_cli pending
-```
-
-前端：
-
-```bash
 cd frontend
-npm install
-npm run dev
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run e2e
 ```
 
-默认访问 `http://127.0.0.1:5173`。前端通过 Vite 代理连接 `http://127.0.0.1:8000` 的后端；生产环境通过 `VITE_API_BASE_URL` 配置 API 地址。
+## 当前状态
 
-Docker：
+- TASK-001～016: 本地业务完成;
+- TASK-019/020/020.A: Agent 架构与 E2E 完成;
+- TASK-021.0/021.1: 完成;
+- TASK-021.2: 代码和自动化完成, 待人工最终验收;
+- TASK-023-FINAL.2: 支付/退款下线, 订单和售后收敛完成;
+- TASK-017/018: 暂缓;
+- TASK-021.3/022: 未开始/范围待定义。
 
-```bash
-docker compose build app
-docker compose up -d
-```
+## 已知限制
 
-## 项目状态
+- 支付和资金退款已从当前正式功能中移除;
+- 历史 payments/refunds 表和支付字段保留, 但运行时不再写入;
+- HITL 未实现;
+- Trace 是进程内 Buffer, 不是审计存储;
+- RAG 评测样本小, 无答案阈值不是生产认证;
+- 当前知识库规模小;
+- 3306 是空库, 本地演示使用 3307。
 
-项目详细进度、延期项和下一任务以 [PROJECT-STATUS.md](docs/PROJECT-STATUS.md) 为准。
+## 许可/用途
 
-当前已完成 TASK-016 本地生产化 Docker Compose，TASK-017 尚未开始：
-
-```text
-已完成：TASK-014 真实 API 联调、分类管理、知识库发布/检索、Agent Prepare/Confirm、Playwright E2E
-下一阶段：TASK-017（尚未开始）
-```
-
-前端工程位于 `frontend/`，使用真实 FastAPI API；Agent 普通对话、业务 Tool、取消 Prepare 和 Confirm 已用真实 DeepSeek 验证。
+用于本地学习、面试演示和工程实践, 不作为生产系统交付。
