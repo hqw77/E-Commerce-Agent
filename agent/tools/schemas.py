@@ -7,13 +7,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 OrderStatus = Literal[
+    "CREATED",
     "PENDING_PAYMENT",
     "PAID",
     "CANCELLED",
     "CLOSED",
     "COMPLETED",
 ]
-AfterSaleType = Literal["REFUND_ONLY", "RETURN_REFUND", "EXCHANGE"]
+AfterSaleType = Literal["EXCHANGE"]
 
 
 class _StrictToolInput(BaseModel):

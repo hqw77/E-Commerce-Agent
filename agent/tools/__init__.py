@@ -109,7 +109,7 @@ def build_tool_registry() -> ToolRegistry:
         RegisteredTool(
             name="prepare_cancel_order",
             description=(
-                "Prepare cancellation of a pending-payment order for explicit "
+                "Prepare cancellation of an unshipped CREATED order for explicit "
                 "user confirmation. This does not cancel the order."
             ),
             args_schema=PrepareCancelOrderInput,

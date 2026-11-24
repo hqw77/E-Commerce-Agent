@@ -20,9 +20,13 @@ _UNSUPPORTED_ACTION_PATTERNS = (
     re.compile(r"change\s+(the\s+)?stock", re.IGNORECASE),
 )
 
-_TOOL_PATTERNS = (
+_WORKFLOW_PATTERNS = (
     re.compile(r"(取消|关闭)\s*订单"),
     re.compile(r"申请\s*售后"),
+    re.compile(r"售后申请"),
+)
+
+_TOOL_PATTERNS = (
     re.compile(r"查询.*订单"),
     re.compile(r"我的订单"),
     re.compile(r"我的售后"),
@@ -36,14 +40,26 @@ def obvious_unsupported_action(message: str) -> bool:
     return any(pattern.search(message) for pattern in _UNSUPPORTED_ACTION_PATTERNS)
 
 
+def obvious_workflow_action(message: str) -> bool:
+    """Detect actions that need the Prepare/Confirm workflow."""
+    return any(pattern.search(message) for pattern in _WORKFLOW_PATTERNS)
+
+
 def obvious_tool_action(message: str) -> bool:
-    """Route clear supported business requests without relying on the model."""
+    """Route clear read-only business requests without relying on the model."""
     return any(pattern.search(message) for pattern in _TOOL_PATTERNS)
 
 
 def _parse_intent(text: str) -> AgentIntent | None:
     normalized = text.strip()
-    if normalized in {"GENERAL", "KNOWLEDGE", "TOOL", "UNSUPPORTED_ACTION"}:
+    if normalized in {
+        "GENERAL",
+        "RAG",
+        "KNOWLEDGE",
+        "TOOL",
+        "WORKFLOW",
+        "UNSUPPORTED_ACTION",
+    }:
         return normalized  # type: ignore[return-value]
 
     try:
@@ -53,7 +69,14 @@ def _parse_intent(text: str) -> AgentIntent | None:
 
     if isinstance(value, dict):
         candidate = value.get("intent")
-        if candidate in {"GENERAL", "KNOWLEDGE", "TOOL", "UNSUPPORTED_ACTION"}:
+        if candidate in {
+            "GENERAL",
+            "RAG",
+            "KNOWLEDGE",
+            "TOOL",
+            "WORKFLOW",
+            "UNSUPPORTED_ACTION",
+        }:
             return candidate  # type: ignore[return-value]
     return None
 
@@ -65,6 +88,8 @@ async def classify_intent(
 ) -> AgentIntent:
     if obvious_unsupported_action(message):
         return "UNSUPPORTED_ACTION"
+    if obvious_workflow_action(message):
+        return "WORKFLOW"
     if obvious_tool_action(message):
         return "TOOL"
 
@@ -83,8 +108,10 @@ def route_intent(state: AgentState) -> str:
     intent = state.get("intent")
     if intent == "GENERAL":
         return "general_answer"
-    if intent == "KNOWLEDGE":
+    if intent in {"RAG", "KNOWLEDGE"}:
         return "retrieve_knowledge"
     if intent == "TOOL":
         return "plan_tool"
+    if intent == "WORKFLOW":
+        return "plan_workflow"
     return "unsupported_action"

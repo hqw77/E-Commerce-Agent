@@ -35,15 +35,10 @@ def _order_data(order) -> dict[str, Any]:
     return {
         "order_no": order.order_no,
         "status": order.status,
-        "payment_status": order.payment_status,
         "fulfillment_status": order.fulfillment_status,
         "total_amount": _money(order.total_amount),
-        "paid_amount": _money(order.paid_amount),
-        "refunded_amount": _money(order.refunded_amount),
         "currency": order.currency,
         "created_at": _iso(order.created_at),
-        "expires_at": _iso(order.expires_at),
-        "paid_at": _iso(order.paid_at),
         "shipped_at": _iso(order.shipped_at),
         "delivered_at": _iso(order.delivered_at),
         "cancelled_at": _iso(order.cancelled_at),
@@ -72,12 +67,6 @@ def _after_sale_data(after_sale, order, item) -> dict[str, Any]:
         "type": after_sale.type,
         "status": after_sale.status,
         "quantity": after_sale.quantity,
-        "requested_amount": _money(after_sale.requested_amount),
-        "approved_amount": (
-            _money(after_sale.approved_amount)
-            if after_sale.approved_amount is not None
-            else None
-        ),
         "reason": after_sale.reason,
         "description": after_sale.description,
         "created_at": _iso(after_sale.created_at),
@@ -198,9 +187,9 @@ async def prepare_cancel_order(
         user_id=context.user.id,
         order_no=args.order_no,
     )
-    if order.status != "PENDING_PAYMENT":
+    if order.status != "CREATED":
         raise ConflictException(
-            message="Only pending-payment orders can be cancelled",
+            message="Only unshipped CREATED orders can be cancelled",
             code="ORDER_STATUS_CONFLICT",
         )
     offer = await context.confirmation_store.create(

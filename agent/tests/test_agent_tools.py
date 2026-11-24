@@ -321,7 +321,7 @@ async def test_prepare_cancel_is_side_effect_free_and_confirm_cancels(seed, redi
         order = (
             await session.execute(select(Order).where(Order.order_no == order_no))
         ).scalar_one()
-        assert order.status == "PENDING_PAYMENT"
+        assert order.status == "CREATED"
         inventory = (
             await session.execute(select(Inventory).where(Inventory.sku_id == seed["sku_id"]))
         ).scalar_one()
@@ -364,14 +364,14 @@ async def test_prepare_cancel_is_side_effect_free_and_confirm_cancels(seed, redi
 
 async def test_prepare_after_sale_is_side_effect_free_and_confirm_creates_pending(seed, redis) -> None:
     _order_id, order_no = await make_order(seed, quantity=1)
+    order_id = _order_id
     async with AsyncSessionLocal() as session:
         order = (
             await session.execute(select(Order).where(Order.order_no == order_no))
         ).scalar_one()
-        order.status = "PAID"
-        order.payment_status = "PAID"
-        order.fulfillment_status = "UNSHIPPED"
-        order.paid_at = datetime.now(UTC).replace(tzinfo=None)
+        order.status = "CREATED"
+        order.fulfillment_status = "DELIVERED"
+        order.delivered_at = datetime.now(UTC).replace(tzinfo=None)
         await session.commit()
 
     prepared = await execute_tool(
@@ -381,15 +381,21 @@ async def test_prepare_after_sale_is_side_effect_free_and_confirm_creates_pendin
         {
             "order_no": order_no,
             "sku_code": seed["sku_code"],
-            "type": "REFUND_ONLY",
-            "reason": "not needed",
+            "type": "EXCHANGE",
+            "reason": "size",
         },
     )
     assert prepared.ok
     assert prepared.pending_action
 
     async with AsyncSessionLocal() as session:
-        count = len((await session.execute(select(AfterSale))).scalars().all())
+        count = len(
+            (
+                await session.execute(
+                    select(AfterSale).where(AfterSale.order_id == order_id)
+                )
+            ).scalars().all()
+        )
         assert count == 0
 
     service = ConfirmationService(
@@ -564,7 +570,7 @@ async def test_agent_graph_prepare_has_no_side_effect(seed, redis) -> None:
                     select(Order).where(Order.order_no == order_no)
                 )
             ).scalar_one()
-            assert order.status == "PENDING_PAYMENT"
+            assert order.status == "CREATED"
     finally:
         await session.close()
         if conversation_id is not None:
