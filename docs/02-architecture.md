@@ -61,9 +61,9 @@ AdminLayout   运营后台
 
 - 单一登录页；
 - Access/Refresh Token；
-- 当前 Token 存在 `localStorage`；
-- 同一普通浏览器同一 Origin 的标签页共享登录状态；
-- 演示时用普通窗口管理员 + 无痕窗口普通用户。
+- 当前 Token 存在 `sessionStorage`，每个标签页独立；
+- 同一浏览器的不同标签页可以分别登录消费者、管理员和调试人员；
+- 关闭标签页后该标签页需要重新登录。
 
 ## 3. 后端分层
 

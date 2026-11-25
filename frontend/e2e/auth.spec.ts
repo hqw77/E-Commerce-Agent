@@ -15,7 +15,7 @@ test('admin login, refresh, and logout flow', async ({ page }) => {
   await expect(page.getByText('首页概览').first()).toBeVisible();
 
   await page.evaluate(() => {
-    localStorage.setItem('ecommerce_agent_access_token', 'broken-e2e-token');
+    sessionStorage.setItem('ecommerce_agent_access_token', 'broken-e2e-token');
   });
   await page.reload();
   await page.waitForLoadState('networkidle');

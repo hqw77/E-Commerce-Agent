@@ -70,7 +70,7 @@ export function LoginPage() {
         <Typography.Text type="secondary">内部账号由管理员开通</Typography.Text>
       </Typography.Paragraph>
       <Typography.Paragraph type="secondary" style={{ textAlign: 'center', fontSize: 12, marginBottom: 0 }}>
-        演示双端：普通窗口登录管理员，无痕窗口登录普通用户。
+        同一浏览器的不同标签页可分别登录消费者、管理员和调试人员；关闭标签页后需重新登录。
       </Typography.Paragraph>
     </AuthLayout>
   );

@@ -1,20 +1,23 @@
 const ACCESS_KEY = 'ecommerce_agent_access_token';
 const REFRESH_KEY = 'ecommerce_agent_refresh_token';
 
+// sessionStorage is scoped to one browser tab. This lets the demo keep a
+// consumer, an administrator and a debugger logged in simultaneously without
+// changing the backend authentication contract.
 export function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_KEY);
+  return sessionStorage.getItem(ACCESS_KEY);
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_KEY);
+  return sessionStorage.getItem(REFRESH_KEY);
 }
 
 export function saveTokens(accessToken: string, refreshToken: string): void {
-  localStorage.setItem(ACCESS_KEY, accessToken);
-  localStorage.setItem(REFRESH_KEY, refreshToken);
+  sessionStorage.setItem(ACCESS_KEY, accessToken);
+  sessionStorage.setItem(REFRESH_KEY, refreshToken);
 }
 
 export function clearTokens(): void {
-  localStorage.removeItem(ACCESS_KEY);
-  localStorage.removeItem(REFRESH_KEY);
+  sessionStorage.removeItem(ACCESS_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
 }
