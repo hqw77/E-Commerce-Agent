@@ -17,6 +17,18 @@ AgentIntent = Literal[
     "UNSUPPORTED_ACTION",
 ]
 
+# Public route vocabulary used by the target Agent architecture. The existing
+# intent vocabulary stays intact for prompt and test compatibility.
+AgentRoute = Literal["general", "rag", "tool", "workflow", "unsupported"]
+ApprovalStatus = Literal[
+    "pending",
+    "approved",
+    "rejected",
+    "executed",
+    "failed",
+    "expired",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class HistoryMessage:
@@ -60,11 +72,15 @@ class AgentState(TypedDict, total=False):
     request_id: str
     trace_id: str
     conversation_id: str
+    thread_id: str
     conversation_created_at: str
     user_id: int
+    user_role: Literal["user", "admin"]
     user_message: str
     history: list[HistoryMessage]
     intent: AgentIntent
+    route: AgentRoute
+    parameters: dict[str, object]
     retrieved_items: list[RetrievalItem]
     context_text: str
     tool_name: str | None
@@ -72,6 +88,9 @@ class AgentState(TypedDict, total=False):
     tool_result: dict[str, object] | None
     tool_call_count: int
     pending_action: dict[str, object] | None
+    approval_required: bool
+    approval_id: str | None
+    approval_status: ApprovalStatus | None
     answer: str
     sources: list[SourceRef]
     error_code: str | None

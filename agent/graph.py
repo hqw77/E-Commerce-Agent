@@ -15,13 +15,14 @@ from agent.nodes import (
     plan_workflow_node,
     retrieve_knowledge_node,
     route_tool_name,
+    router_node,
     save_conversation_node,
     tool_answer_node,
     unsupported_action_node,
     validate_output_node,
 )
 from agent.observability.instrumentation import instrument_node
-from agent.routing import route_intent
+from agent.routing import node_for_route
 from agent.state import AgentState
 
 
@@ -35,6 +36,10 @@ def build_agent_graph():
     builder.add_node(
         "classify_intent",
         instrument_node("classify_intent", classify_intent_node),
+    )
+    builder.add_node(
+        "router",
+        instrument_node("router", router_node),
     )
     builder.add_node(
         "general_answer",
@@ -79,9 +84,10 @@ def build_agent_graph():
 
     builder.add_edge(START, "load_conversation")
     builder.add_edge("load_conversation", "classify_intent")
+    builder.add_edge("classify_intent", "router")
     builder.add_conditional_edges(
-        "classify_intent",
-        route_intent,
+        "router",
+        node_for_route,
         {
             "general_answer": "general_answer",
             "retrieve_knowledge": "retrieve_knowledge",

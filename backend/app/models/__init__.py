@@ -5,6 +5,7 @@
 """
 
 from app.models.after_sale import AfterSale
+from app.models.agent_approval import AgentApproval
 from app.models.category import Category
 from app.models.inventory import Inventory
 from app.models.inventory_transaction import InventoryTransaction
@@ -22,6 +23,7 @@ from app.models.user import User
 
 __all__ = [
     "AfterSale",
+    "AgentApproval",
     "Category",
     "Inventory",
     "InventoryTransaction",

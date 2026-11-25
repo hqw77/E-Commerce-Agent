@@ -1,5 +1,5 @@
-import { CheckCircleOutlined } from '@ant-design/icons';
-import { Button, Card, Space, Typography } from 'antd';
+import { CheckCircleOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Space, Typography } from 'antd';
 import type { PendingAction } from '../../types/agent';
 import { formatDate } from '../../utils/format';
 
@@ -22,17 +22,27 @@ export function PendingActionCard({
         <Typography.Text type="secondary">{action.summary}</Typography.Text>
         <Typography.Text type="secondary">影响：{action.effect}</Typography.Text>
         <Typography.Text type="secondary">有效期至：{formatDate(action.expires_at)}</Typography.Text>
-        <Space>
-          <Button
-            type="primary"
-            icon={<CheckCircleOutlined />}
-            loading={confirming}
-            onClick={onConfirm}
-          >
-            确认执行
-          </Button>
-          <Button onClick={onDismiss}>暂不操作</Button>
-        </Space>
+        {action.approval_required ? (
+          <Alert
+            type="info"
+            showIcon
+            icon={<SafetyCertificateOutlined />}
+            message="已提交管理员审批"
+            description="审批通过前不会修改业务数据。请到运营后台的 Agent 审批中心处理。"
+          />
+        ) : (
+          <Space>
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              loading={confirming}
+              onClick={onConfirm}
+            >
+              确认执行
+            </Button>
+            <Button onClick={onDismiss}>暂不操作</Button>
+          </Space>
+        )}
       </Space>
     </Card>
   );

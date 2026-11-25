@@ -17,6 +17,7 @@ order_items
 payments（历史兼容）
 refunds（历史兼容）
 after_sales
+agent_approvals
 knowledge_documents
 knowledge_document_versions
 knowledge_chunks
@@ -214,7 +215,28 @@ GET  /api/v1/agent/runs/{trace_id}
 /api/v1/admin/orders
 /api/v1/admin/after-sales
 /api/v1/admin/categories
+/api/v1/admin/agent/approvals
 ```
+
+### Agent 审批中心
+
+```text
+GET  /api/v1/admin/agent/approvals
+GET  /api/v1/admin/agent/approvals/{approval_id}
+POST /api/v1/admin/agent/approvals/{approval_id}/approve
+POST /api/v1/admin/agent/approvals/{approval_id}/reject
+```
+
+审批状态：
+
+```text
+pending → approved → executed
+        → rejected
+        → failed
+        → expired
+```
+
+审批计划暂存 Redis；`agent_approvals` 表保存持久化审计和执行状态。
 
 ### 知识库
 

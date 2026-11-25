@@ -2,6 +2,9 @@
 
 from fastapi import APIRouter
 
+from app.api.v1.admin.agent_approvals import (
+    router as admin_agent_approvals_router,
+)
 from app.api.v1.admin.categories import router as admin_categories_router
 from app.api.v1.admin.inventory import router as admin_inventory_router
 from app.api.v1.admin.orders import router as admin_orders_router
@@ -66,4 +69,9 @@ api_router.include_router(
     admin_inventory_router,
     prefix="/admin/inventory",
     tags=["Admin Inventory"],
+)
+api_router.include_router(
+    admin_agent_approvals_router,
+    prefix="/admin/agent/approvals",
+    tags=["Admin Agent Approvals"],
 )

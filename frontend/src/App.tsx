@@ -29,6 +29,7 @@ import { AfterSaleDetailPage } from './pages/after-sales/AfterSaleDetail';
 import { KnowledgeListPage } from './pages/knowledge/KnowledgeList';
 import { KnowledgeDetailPage } from './pages/knowledge/KnowledgeDetail';
 import { AgentChatPage } from './pages/agent/AgentChat';
+import { AgentApprovalsPage } from './pages/agent/AgentApprovals';
 import { TraceConsolePage } from './pages/agent/TraceConsole';
 
 const queryClient = new QueryClient({
@@ -126,6 +127,7 @@ function AppRoutes() {
         <Route path="/knowledge" element={<KnowledgeListPage />} />
         <Route path="/knowledge/:documentId" element={<KnowledgeDetailPage />} />
         <Route path="/agent" element={<AgentChatPage />} />
+        <Route path="/agent/approvals" element={<AgentApprovalsPage />} />
         <Route path="/agent/debug" element={<TraceConsolePage />} />
       </Route>
       <Route path="/" element={<HomeRedirect />} />

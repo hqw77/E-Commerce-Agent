@@ -15,6 +15,7 @@
 07 面试问答
 08 现场演示脚本
 09 面试学习规划
+10 Agent 架构升级分析（阶段 0 快照）
 ```
 
 ## 文档索引
@@ -28,6 +29,7 @@
 - [07 面试问答](07-interview-qa.md)
 - [08 现场演示脚本](08-demo-script.md)
 - [09 面试学习规划](09-study-plan.md)
+- [10 Agent 架构升级分析](10-agent-upgrade-analysis.md)
 
 ## 项目一句话
 

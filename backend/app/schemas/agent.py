@@ -79,6 +79,9 @@ class PendingActionResponse(BaseModel):
     effect: str
     summary: str
     expires_at: datetime
+    approval_required: bool = False
+    approval_id: str | None = None
+    approval_status: str | None = None
 
 
 class ConfirmActionRequest(BaseModel):

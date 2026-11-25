@@ -244,6 +244,7 @@ top_score < 0.60 → LOW_SCORE
 - Graph 一次只选择一个工具；
 - 没有多工具循环；
 - Trace 不持久化；
-- 没有 HITL；
+- 管理员库存调整 HITL 已实现：Prepare → 管理员审批 → 恢复执行；
+- HITL 的 Checkpointer 使用进程内实现，重启后依赖重建中断状态；
 - RAG 评测是小样本；
 - 没有 Reranker / 混合检索 / OCR。

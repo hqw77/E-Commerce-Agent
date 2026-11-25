@@ -42,6 +42,7 @@ AI 导购 / 客服
 /after-sales     售后管理
 /knowledge       知识库
 /agent           AI 助手
+/agent/approvals Agent 审批中心
 /agent/debug     Agent Trace
 ```
 

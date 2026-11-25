@@ -48,6 +48,7 @@
 | 知识库管理 | 已完成 |
 | AI 助手 | 已完成 |
 | Agent Trace | 已完成 |
+| Agent 审批中心（库存调整 HITL） | 已完成 |
 | 分类管理独立页面 | 已移除，分类数据保留 |
 | 购物车/支付管理 | 不在范围 |
 
@@ -494,6 +495,7 @@ http://127.0.0.1:8000/docs
 没有云部署、HTTPS、域名拆分
 没有 CI/CD 和生产监控
 Trace 是进程内 Buffer，不是持久化审计
+Agent 审批的 Checkpointer 是进程内实现，重启后依赖重建中断状态
 RAG 评测是小样本，无答案阈值不是生产认证
 新订单编号由 OrderService 生成，格式与早期演示订单不同
 ```
@@ -519,6 +521,7 @@ RAG 评测是小样本，无答案阈值不是生产认证
 - [面试问答](docs/07-interview-qa.md)
 - [现场演示脚本](docs/08-demo-script.md)
 - [面试学习规划](docs/09-study-plan.md)
+- [Agent 架构升级分析（阶段 0 快照）](docs/10-agent-upgrade-analysis.md)
 
 ---
 

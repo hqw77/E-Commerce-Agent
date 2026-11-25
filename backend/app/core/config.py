@@ -114,6 +114,11 @@ class Settings(BaseSettings):
         ge=30,
         le=3600,
     )
+    agent_approval_ttl_seconds: int = Field(
+        default=86400,
+        ge=300,
+        le=604800,
+    )
 
     # JWT 配置. issuer/audience 用于限制 token 的签发和消费范围,
     # leeway 容忍客户端与服务端之间的少量时钟偏差.

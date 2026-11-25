@@ -178,7 +178,13 @@ class AgentRuntime:
             "request_id": request_id,
             "trace_id": trace_id,
             "conversation_id": str(active_conversation_id),
+            "thread_id": str(active_conversation_id),
             "user_id": self.user.id,
+            "user_role": "admin" if self.user.is_admin else "user",
+            "parameters": {},
+            "approval_required": False,
+            "approval_id": None,
+            "approval_status": None,
             "user_message": normalized,
             "started_at": started_at,
         }

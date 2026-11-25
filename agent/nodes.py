@@ -28,7 +28,7 @@ from agent.prompts import (
     WORKFLOW_SYSTEM_PROMPT,
 )
 from agent.rag_evidence import evaluate_rag_evidence
-from agent.routing import classify_intent
+from agent.routing import classify_intent, route_name_for_intent
 from agent.safety import SafetyPipeline
 from agent.state import AgentState, HistoryMessage, TokenUsage
 from agent.tools.context import ToolContext
@@ -83,6 +83,27 @@ async def classify_intent_node(
             result_summary={"intent": intent},
         )
     return {"intent": intent}
+
+
+async def router_node(
+    state: AgentState,
+    runtime: Runtime[AgentRuntimeContext],
+) -> dict[str, object]:
+    """Materialize the explicit route while keeping the legacy intent."""
+    context = runtime.context
+    route = state.get("route") or route_name_for_intent(state.get("intent"))
+    user_role = "admin" if context.user.is_admin else "user"
+    trace = context.trace
+    if trace is not None:
+        trace.emit(
+            "router_decision",
+            node_name="router",
+            intent=state.get("intent"),
+            route=route.upper(),
+            execution_status="SUCCESS",
+            result_summary={"route": route, "user_role": user_role},
+        )
+    return {"route": route, "user_role": user_role}
 
 
 async def general_answer_node(
@@ -412,6 +433,20 @@ async def execute_tool_node(
     return {
         "tool_result": asdict(result),
         "pending_action": result.pending_action,
+        "approval_required": bool(
+            result.pending_action
+            and result.pending_action.get("approval_required")
+        ),
+        "approval_id": (
+            result.pending_action.get("approval_id")
+            if result.pending_action
+            else None
+        ),
+        "approval_status": (
+            result.pending_action.get("approval_status")
+            if result.pending_action
+            else None
+        ),
         "tool_call_count": state.get("tool_call_count", 0) + 1,
     }
 
@@ -423,6 +458,15 @@ async def tool_answer_node(
     result = state.get("tool_result") or {}
     pending_action = state.get("pending_action")
     if pending_action:
+        if pending_action.get("approval_required"):
+            return {
+                "answer": (
+                    "已创建库存调整审批，等待管理员在审批中心处理："
+                    f"approval_id={pending_action.get('approval_id')}。"
+                    "审批通过前不会修改库存。"
+                ),
+                "sources": [],
+            }
         return {
             "answer": (
                 "已准备该业务操作，请通过独立确认接口确认后执行："

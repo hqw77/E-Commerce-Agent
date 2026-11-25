@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from agent.tools.inventory import prepare_adjust_inventory
 from agent.tools.order import (
     get_my_after_sales,
     get_my_order,
@@ -25,6 +26,7 @@ from agent.tools.schemas import (
     GetSkuDetailInput,
     ListMyAfterSalesInput,
     ListMyOrdersInput,
+    PrepareAdjustInventoryInput,
     PrepareCancelOrderInput,
     PrepareCreateAfterSaleInput,
     SearchProductsInput,
@@ -127,6 +129,18 @@ def build_tool_registry() -> ToolRegistry:
             args_schema=PrepareCreateAfterSaleInput,
             kind="PREPARE",
             handler=prepare_create_after_sales,
+        )
+    )
+    registry.register(
+        RegisteredTool(
+            name="prepare_adjust_inventory",
+            description=(
+                "Prepare an administrator-approved inventory adjustment. "
+                "This only creates a pending approval and never changes stock."
+            ),
+            args_schema=PrepareAdjustInventoryInput,
+            kind="PREPARE",
+            handler=prepare_adjust_inventory,
         )
     )
     return registry

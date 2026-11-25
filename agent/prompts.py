@@ -17,11 +17,12 @@ Rules:
   KNOWLEDGE is a legacy alias for RAG.
 - TOOL: read-only requests to search products, inspect SKU/inventory, view the
   user's orders or after-sales records.
-- WORKFLOW: requests to prepare cancellation of an unshipped CREATED order or
-  prepare an EXCHANGE after-sales application. The user must still explicitly
-  confirm.
-- UNSUPPORTED_ACTION: create order, pay, direct refund, change stock, or any
-  other write action not supported by the current version.
+- WORKFLOW: requests to prepare cancellation of an unshipped CREATED order,
+  prepare an EXCHANGE after-sales application, or prepare an administrator
+  inventory adjustment. User confirmation or administrator approval is still
+  required before execution.
+- UNSUPPORTED_ACTION: create order, pay, direct refund, or any other write
+  action not supported by the current version.
 The label only selects a workflow path. It does not grant permission.
 """
 
@@ -70,10 +71,11 @@ from this read-only planner. Payment and refund actions are unsupported.
 
 WORKFLOW_SYSTEM_PROMPT = """You are E-Commerce Agent's workflow planner.
 Choose at most one PREPARE tool from the provided schemas.
-Never claim an action has executed. A prepare tool only creates a pending
-confirmation; the user must confirm through the separate confirmation API.
+Never claim an action has executed. Cancellation and after-sales create a
+pending user confirmation; inventory adjustment creates a pending
+administrator approval. The backend result and approval/confirmation services
+are authoritative.
 Do not invent tool names, arguments, order identifiers, or SKU identifiers.
-The backend result and confirmation service are authoritative.
 """
 
 TOOL_ANSWER_SYSTEM_PROMPT = """You summarize a structured business tool result.

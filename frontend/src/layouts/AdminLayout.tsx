@@ -7,6 +7,7 @@ import {
   LogoutOutlined,
   MessageOutlined,
   ProfileOutlined,
+  SafetyCertificateOutlined,
   ShoppingCartOutlined,
   TagsOutlined,
   UserOutlined,
@@ -24,6 +25,7 @@ const items = [
   { key: '/orders', icon: <ShoppingCartOutlined />, label: <Link to="/orders">订单管理</Link> },
   { key: '/after-sales', icon: <ProfileOutlined />, label: <Link to="/after-sales">售后管理</Link> },
   { key: '/knowledge', icon: <FileTextOutlined />, label: <Link to="/knowledge">知识库</Link> },
+  { key: '/agent/approvals', icon: <SafetyCertificateOutlined />, label: <Link to="/agent/approvals">Agent 审批中心</Link> },
   { key: '/agent', icon: <MessageOutlined />, label: <Link to="/agent">AI 助手</Link> },
   { key: '/agent/debug', icon: <BugOutlined />, label: <Link to="/agent/debug">Agent Trace</Link> },
 ];
@@ -34,6 +36,7 @@ function selectedKey(pathname: string): string {
   if (pathname.startsWith('/orders')) return '/orders';
   if (pathname.startsWith('/after-sales')) return '/after-sales';
   if (pathname.startsWith('/knowledge')) return '/knowledge';
+  if (pathname.startsWith('/agent/approvals')) return '/agent/approvals';
   if (pathname.startsWith('/agent/debug')) return '/agent/debug';
   if (pathname.startsWith('/agent')) return '/agent';
   return '/dashboard';

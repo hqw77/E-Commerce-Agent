@@ -8,12 +8,11 @@ import re
 from agent.exceptions import AgentIntentError
 from agent.llm import AgentLLM
 from agent.prompts import INTENT_SYSTEM_PROMPT
-from agent.state import AgentIntent, AgentState
+from agent.state import AgentIntent, AgentRoute, AgentState
 
 _UNSUPPORTED_ACTION_PATTERNS = (
     re.compile(r"申请\s*退款"),
     re.compile(r"发起\s*支付"),
-    re.compile(r"修改\s*库存"),
     re.compile(r"创建\s*订单"),
     re.compile(r"帮我\s*退款"),
     re.compile(r"refund\s+(my\s+)?order", re.IGNORECASE),
@@ -24,6 +23,7 @@ _WORKFLOW_PATTERNS = (
     re.compile(r"(取消|关闭)\s*订单"),
     re.compile(r"申请\s*售后"),
     re.compile(r"售后申请"),
+    re.compile(r"(调整|修改|增加|减少|补充)\s*(SKU\s*)?库存", re.IGNORECASE),
 )
 
 _TOOL_PATTERNS = (
@@ -115,3 +115,35 @@ def route_intent(state: AgentState) -> str:
     if intent == "WORKFLOW":
         return "plan_workflow"
     return "unsupported_action"
+
+
+def route_name_for_intent(intent: object) -> AgentRoute:
+    """Map the legacy uppercase intent to the public route vocabulary."""
+    if intent == "GENERAL":
+        return "general"
+    if intent in {"RAG", "KNOWLEDGE"}:
+        return "rag"
+    if intent == "TOOL":
+        return "tool"
+    if intent == "WORKFLOW":
+        return "workflow"
+    return "unsupported"
+
+
+def route_for_state(state: AgentState) -> AgentRoute:
+    """Prefer the explicit route, falling back to the legacy intent."""
+    route = state.get("route")
+    if route in {"general", "rag", "tool", "workflow", "unsupported"}:
+        return route  # type: ignore[return-value]
+    return route_name_for_intent(state.get("intent"))
+
+
+def node_for_route(state: AgentState) -> str:
+    """Return the graph node selected by the explicit Router."""
+    return {
+        "general": "general_answer",
+        "rag": "retrieve_knowledge",
+        "tool": "plan_tool",
+        "workflow": "plan_workflow",
+        "unsupported": "unsupported_action",
+    }[route_for_state(state)]

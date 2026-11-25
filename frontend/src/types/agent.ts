@@ -17,6 +17,45 @@ export interface PendingAction {
   effect: string;
   summary: string;
   expires_at: string;
+  approval_required?: boolean;
+  approval_id?: string | null;
+  approval_status?: string | null;
+}
+
+export type AgentApprovalStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'executed'
+  | 'failed'
+  | 'expired';
+
+export interface AgentApproval {
+  approval_id: string;
+  operation: string;
+  resource_no: string;
+  status: AgentApprovalStatus;
+  arguments: Record<string, unknown>;
+  before_data: Record<string, unknown>;
+  planned_data: Record<string, unknown>;
+  action_hash: string;
+  requester_id: number;
+  approver_id: number | null;
+  conversation_id: string;
+  thread_id: string;
+  review_note: string | null;
+  error_code: string | null;
+  expires_at: string;
+  reviewed_at: string | null;
+  executed_at: string | null;
+  created_at: string;
+}
+
+export interface AgentApprovalList {
+  items: AgentApproval[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 export interface ChatResponse {
