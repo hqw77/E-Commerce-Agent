@@ -53,7 +53,7 @@ async def redis() -> AsyncIterator[Redis]:
 
 @pytest_asyncio.fixture(loop_scope="module")
 async def api_client(redis: Redis) -> AsyncIterator[AsyncClient]:
-    user = make_user(uuid4().int)
+    user = make_user(uuid4().int, is_debugger=True)
 
     async def fake_user() -> SimpleNamespace:
         return user
@@ -424,7 +424,7 @@ async def test_trace_endpoint_requires_auth() -> None:
         response = await client.get("/api/v1/agent/runs/anything")
     assert response.status_code == 401
 
-async def test_trace_endpoint_hides_other_user_trace(
+async def test_trace_endpoint_allows_debugger_to_read_foreign_trace(
     api_client: AsyncClient,
 ) -> None:
     from agent.observability.store import BufferTraceCollector, get_trace_buffer
@@ -442,4 +442,5 @@ async def test_trace_endpoint_hides_other_user_trace(
     trace.emit("request_start")
 
     response = await api_client.get(f"/api/v1/agent/runs/{trace_id}")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["trace_id"] == trace_id

@@ -4,8 +4,10 @@ import zhCN from 'antd/locale/zh_CN';
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AdminLayout } from './layouts/AdminLayout';
+import { DebugLayout } from './layouts/DebugLayout';
 import { ShopLayout } from './layouts/ShopLayout';
 import { AdminRoute } from './router/AdminRoute';
+import { DebugRoute } from './router/DebugRoute';
 import { ProtectedRoute } from './router/ProtectedRoute';
 import { AppLoading } from './components/Common';
 import { bootstrapAuth, useAuthStore } from './stores/authStore';
@@ -18,6 +20,7 @@ import { ShopOrdersPage } from './pages/shop/ShopOrders';
 import { ShopOrderDetailPage } from './pages/shop/ShopOrderDetail';
 import { ShopAfterSalesPage } from './pages/shop/ShopAfterSales';
 import { ShopAfterSaleDetailPage } from './pages/shop/ShopAfterSaleDetail';
+import { ShopApprovalsPage } from './pages/shop/ShopApprovals';
 import { ProductListPage } from './pages/products/ProductList';
 import { ProductDetailPage } from './pages/products/ProductDetail';
 import { InventoryListPage } from './pages/inventory/InventoryList';
@@ -49,6 +52,9 @@ function HomeRedirect() {
   }
   if (status === 'authenticated' && user?.is_admin) {
     return <Navigate to="/dashboard" replace />;
+  }
+  if (status === 'authenticated' && user?.is_debugger) {
+    return <Navigate to="/agent/debug" replace />;
   }
   return <Navigate to="/shop" replace />;
 }
@@ -107,6 +113,14 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="approvals"
+          element={
+            <ProtectedRoute>
+              <ShopApprovalsPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
       <Route
         element={
@@ -128,7 +142,16 @@ function AppRoutes() {
         <Route path="/knowledge/:documentId" element={<KnowledgeDetailPage />} />
         <Route path="/agent" element={<AgentChatPage />} />
         <Route path="/agent/approvals" element={<AgentApprovalsPage />} />
+      </Route>
+      <Route
+        element={
+          <DebugRoute>
+            <DebugLayout />
+          </DebugRoute>
+        }
+      >
         <Route path="/agent/debug" element={<TraceConsolePage />} />
+        <Route path="/agent/debug/chat" element={<AgentChatPage />} />
       </Route>
       <Route path="/" element={<HomeRedirect />} />
       <Route path="*" element={<Navigate to="/shop" replace />} />

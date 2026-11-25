@@ -10,6 +10,12 @@ interface LoginValues {
   password: string;
 }
 
+function destination(user: { is_admin: boolean; is_debugger: boolean }): string {
+  if (user.is_admin) return '/dashboard';
+  if (user.is_debugger) return '/agent/debug';
+  return '/shop';
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const { status, error, user } = useAuthStore();
@@ -17,8 +23,8 @@ export function LoginPage() {
   const [form] = Form.useForm<LoginValues>();
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      navigate(user?.is_admin ? '/dashboard' : '/shop', { replace: true });
+    if (status === 'authenticated' && user) {
+      navigate(destination(user), { replace: true });
     }
   }, [navigate, status, user]);
 
@@ -26,7 +32,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       const authenticatedUser = await login(values);
-      navigate(authenticatedUser.is_admin ? '/dashboard' : '/shop', { replace: true });
+      navigate(destination(authenticatedUser), { replace: true });
     } catch {
       // The auth store exposes the normalized error above the form.
     } finally {
@@ -36,9 +42,9 @@ export function LoginPage() {
 
   return (
     <AuthLayout>
-      <Typography.Title level={3}>登录运营后台</Typography.Title>
+      <Typography.Title level={3}>登录清风数码</Typography.Title>
       <Typography.Paragraph type="secondary">
-        使用员工账号登录，管理商品、库存、订单与售后。
+        消费者进入商城，管理员进入运营后台，调试人员进入 Agent 观察台。
       </Typography.Paragraph>
       {error ? <Alert type="error" showIcon message={error} className="form-alert" /> : null}
       <Form form={form} layout="vertical" onFinish={handleSubmit} requiredMark={false}>

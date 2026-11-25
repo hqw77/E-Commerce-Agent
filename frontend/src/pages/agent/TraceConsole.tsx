@@ -41,10 +41,11 @@ export function TraceConsolePage() {
 
   return (
     <div className="page-stack">
-      <Card className="soft-card" title="Agent Trace Console">
+      <Card className="soft-card" title="Agent 调试观察台">
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Typography.Paragraph type="secondary">
-            Trace 来自后端进程内缓冲和脱敏事件。普通用户只能查询自己的 Trace, 管理员可以查询用户 Trace。
+            面向调试人员的只读观察台。可查看一次 Agent 请求的 Intent、Router、RAG、
+            Tool、Workflow、HITL 与输出校验事件；敏感字段已由后端脱敏。
           </Typography.Paragraph>
           <Space.Compact style={{ width: '100%' }}>
             <Input

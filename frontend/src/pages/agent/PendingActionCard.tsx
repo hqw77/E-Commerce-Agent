@@ -28,7 +28,7 @@ export function PendingActionCard({
             showIcon
             icon={<SafetyCertificateOutlined />}
             message="已提交管理员审批"
-            description="审批通过前不会修改业务数据。请到运营后台的 Agent 审批中心处理。"
+            description="审批通过前不会修改业务数据。你可以在「我的审批」查看进度，管理员在审批中心处理。"
           />
         ) : (
           <Space>

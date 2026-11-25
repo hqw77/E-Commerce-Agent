@@ -84,6 +84,7 @@ def test_register_user_success(api_client, monkeypatch):
         "email": "alice@example.com",
         "is_active": True,
         "is_admin": False,
+        "is_debugger": False,
     }
 
     assert "password_hash" not in response.json()
@@ -590,6 +591,7 @@ def test_me_with_valid_token_returns_current_user(
         "email": user.email,
         "is_active": True,
         "is_admin": False,
+        "is_debugger": False,
     }
     assert "password_hash" not in response.json()
 

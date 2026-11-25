@@ -46,3 +46,23 @@ export async function rejectAgentApproval(
   );
   return response.data;
 }
+
+export async function listMyAgentApprovals(params: {
+  status?: AgentApprovalStatus;
+  page?: number;
+  page_size?: number;
+}): Promise<AgentApprovalList> {
+  const response = await api.get<AgentApprovalList>('/agent/approvals/mine', {
+    params,
+  });
+  return response.data;
+}
+
+export async function getMyAgentApproval(
+  approvalId: string,
+): Promise<AgentApproval> {
+  const response = await api.get<AgentApproval>(
+    `/agent/approvals/mine/${encodeURIComponent(approvalId)}`,
+  );
+  return response.data;
+}

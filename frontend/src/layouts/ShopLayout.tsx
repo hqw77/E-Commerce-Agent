@@ -22,10 +22,14 @@ export function ShopLayout() {
             <>
               <Link to="/shop/orders">我的订单</Link>
               <Link to="/shop/after-sales">我的售后</Link>
+              <Link to="/shop/approvals">我的审批</Link>
             </>
           ) : null}
           {status === 'authenticated' && user?.is_admin ? (
             <Link to="/dashboard">运营后台</Link>
+          ) : null}
+          {status === 'authenticated' && (user?.is_debugger || user?.is_admin) ? (
+            <Link to="/agent/debug">调试台</Link>
           ) : null}
         </Space>
         <Space wrap>

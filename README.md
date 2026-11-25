@@ -1,18 +1,20 @@
 # 清风数码 · E-Commerce Agent
 
-一个本地可运行的双端电商智能体项目：
+一个本地可运行的三端电商智能体项目：
 
 ```text
-消费者商城 + AI 导购/客服 + 运营管理后台
+消费者商城 + AI 导购/客服
+运营管理后台 + Agent 审批中心
+Agent 调试观察台
 ```
 
 项目重点不是做一个完整商业电商平台，而是验证：
 
 - 真实商品、SKU、库存、订单、售后如何建模；
 - LangGraph Agent 如何安全调用真实业务能力；
-- 高风险操作如何通过 Prepare / Confirm 受控执行；
+- 高风险操作如何通过 Prepare / Admin Approval 受控执行；
 - RAG 如何做到 ACL、Chunk 回查和可解释的拒答；
-- 消费者端和运营端如何在同一套后端之上分工。
+- 消费者、运营和调试三类角色如何在同一套后端之上分工。
 
 > 本项目是本地开发/求职演示项目，不是生产系统。
 > 不包含真实支付、购物车、云部署、HTTPS 和正式运维体系。
@@ -33,6 +35,7 @@
 | 我的售后、售后详情 | 已完成 |
 | 申请换货 | 已完成 |
 | 填写退货物流 | 已完成 |
+| 我的审批 / 审批进度 | 已完成 |
 | AI 导购/客服 | 已完成 |
 | 购物车 | 未实现 |
 | 支付/结算 | 未实现 |
@@ -56,15 +59,17 @@
 
 ```text
 游客      浏览商城、查看商品
-普通用户  商城、立即购买、我的订单、我的售后、AI 导购
-管理员    运营后台，也可以进入商城
+普通用户  商城、立即购买、我的订单、我的售后、我的审批、AI 导购
+管理员    运营后台、Agent 审批中心、Agent Trace
+调试人员  只读 Agent Trace 和调试对话，不能审批业务
 ```
 
-只有一个登录页，登录后按后端返回的 `is_admin` 自动跳转：
+只有一个登录页，登录后按后端返回的角色自动跳转：
 
 ```text
 普通用户 → /shop
 管理员   → /dashboard
+调试人员 → /agent/debug
 ```
 
 ---
@@ -75,8 +80,11 @@
 
 ```text
 商城       http://127.0.0.1:5173/shop
+我的审批    http://127.0.0.1:5173/shop/approvals
 登录       http://127.0.0.1:5173/login
 运营后台    http://127.0.0.1:5173/dashboard
+Agent 审批  http://127.0.0.1:5173/agent/approvals
+调试观察台  http://127.0.0.1:5173/agent/debug
 后端 API   http://127.0.0.1:8000/api/v1
 Swagger    http://127.0.0.1:8000/docs
 ```
@@ -379,6 +387,14 @@ UPDATE users SET is_admin = 1 WHERE email = 'your-admin@example.com';
 ```
 
 重新登录后进入 `/dashboard`。
+
+创建调试人员：
+
+```sql
+UPDATE users SET is_debugger = 1 WHERE email = 'your-debugger@example.com';
+```
+
+重新登录后进入 `/agent/debug`；调试人员不能访问 `/agent/approvals`。
 
 ---
 

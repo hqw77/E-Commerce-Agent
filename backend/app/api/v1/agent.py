@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent.observability.store import get_trace_buffer
 from agent.runtime import AgentRuntime
 from agent.tools.confirmation import ConfirmationService
-from app.api.dependencies import CurrentUser
+from app.api.dependencies import CurrentDebugger, CurrentUser
 from app.core.config import get_settings
 from app.core.exceptions import ResourceNotFoundException
 from app.db.session import get_db
@@ -26,6 +26,12 @@ from app.schemas.agent import (
     TraceEventResponse,
     TraceRunResponse,
 )
+from app.schemas.agent_approval import (
+    AgentApprovalListResponse,
+    AgentApprovalResponse,
+    ApprovalStatus,
+)
+from app.services.agent_approval import AgentApprovalService
 
 router = APIRouter()
 
@@ -76,30 +82,63 @@ async def chat(
 
 
 @router.get(
+    "/approvals/mine",
+    response_model=AgentApprovalListResponse,
+    summary="List my Agent approvals",
+)
+async def list_my_approvals(
+    session: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+    status: ApprovalStatus | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> AgentApprovalListResponse:
+    """Consumer-scoped approval status; never exposes another user's data."""
+    service = AgentApprovalService(session, user, settings=get_settings())
+    items, total = await service.list_for_requester(
+        requester_id=user.id,
+        status=status,
+        page=page,
+        page_size=page_size,
+    )
+    return AgentApprovalListResponse(
+        items=[AgentApprovalResponse.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get(
+    "/approvals/mine/{approval_id}",
+    response_model=AgentApprovalResponse,
+    summary="Get one of my Agent approvals",
+)
+async def get_my_approval(
+    approval_id: Annotated[str, Path(min_length=1, max_length=64)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    user: CurrentUser,
+) -> AgentApprovalResponse:
+    service = AgentApprovalService(session, user, settings=get_settings())
+    record = await service.get_for_requester(
+        requester_id=user.id,
+        approval_id=approval_id,
+    )
+    return AgentApprovalResponse.model_validate(record)
+
+
+@router.get(
     "/runs/{trace_id}",
     response_model=TraceRunResponse,
     summary="Get an Agent trace run",
 )
 async def get_trace_run(
     trace_id: Annotated[str, Path(min_length=1, max_length=128)],
-    user: CurrentUser,
+    _debugger: CurrentDebugger,
 ) -> TraceRunResponse:
-    """Return a redacted trace to its owner or an administrator.
-
-    The trace buffer is process-local and intentionally not a durable audit
-    store. Production log output remains the source of record.
-    """
+    """Return a redacted trace to the debugger/admin console only."""
     events = get_trace_buffer().get(trace_id)
     if not events:
-        raise ResourceNotFoundException(
-            message="Agent trace was not found",
-            code="AGENT_TRACE_NOT_FOUND",
-        )
-    # 普通用户只能看自己的 trace; 对其他用户的 trace 返回 404 而不是 403,
-    # 避免通过错误码推断某个 trace 是否存在.
-    if not user.is_admin and any(
-        int(event.get("user_id", -1)) != user.id for event in events
-    ):
         raise ResourceNotFoundException(
             message="Agent trace was not found",
             code="AGENT_TRACE_NOT_FOUND",

@@ -57,9 +57,11 @@ class UserResponse(BaseModel):
 
     is_admin: bool = False
 
-    @field_validator("is_admin", mode="before")
+    is_debugger: bool = False
+
+    @field_validator("is_admin", "is_debugger", mode="before")
     @classmethod
-    def normalize_is_admin(cls, value: object) -> bool:
-        # ORM objects that have not been flushed yet may expose None for this
-        # server-defaulted column; treat that as a normal user.
+    def normalize_flags(cls, value: object) -> bool:
+        # ORM objects that have not been flushed yet may expose None for these
+        # server-defaulted columns; treat them as normal users.
         return bool(value)

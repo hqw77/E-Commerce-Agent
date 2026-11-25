@@ -72,3 +72,17 @@ async def get_current_admin(current_user: CurrentUser) -> User:
 
 # 管理端路由使用 CurrentAdmin, 避免每个接口手写 is_admin 判断.
 CurrentAdmin = Annotated[User, Depends(get_current_admin)]
+
+
+async def get_current_debugger(current_user: CurrentUser) -> User:
+    """Allow administrators or the dedicated debug role only."""
+
+    if not current_user.is_admin and not current_user.is_debugger:
+        raise PermissionDeniedException(
+            message="Debugger privileges are required",
+        )
+
+    return current_user
+
+
+CurrentDebugger = Annotated[User, Depends(get_current_debugger)]

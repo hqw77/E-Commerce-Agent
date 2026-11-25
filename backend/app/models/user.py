@@ -69,6 +69,14 @@ class User(Base):
         nullable=False,
     )
 
+    # 调试角色只能访问 Trace/调试接口, 默认不具备业务审批权限.
+    is_debugger: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("0"),
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.now(),

@@ -115,12 +115,18 @@ def make_item(
     )
 
 
-def make_user(user_id: int, *, is_admin: bool = False) -> SimpleNamespace:
+def make_user(
+    user_id: int,
+    *,
+    is_admin: bool = False,
+    is_debugger: bool = False,
+) -> SimpleNamespace:
     return SimpleNamespace(
         id=user_id,
         email=f"agent-{user_id}@example.com",
         is_active=True,
         is_admin=is_admin,
+        is_debugger=is_debugger,
     )
 
 

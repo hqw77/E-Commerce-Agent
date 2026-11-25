@@ -236,6 +236,54 @@ class AgentApprovalService:
             )
         return record
 
+    async def list_for_requester(
+        self,
+        *,
+        requester_id: int,
+        status: ApprovalStatus | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[AgentApproval], int]:
+        """Consumer-scoped list; never exposes another user's approvals."""
+        statement = select(AgentApproval).where(
+            AgentApproval.requester_id == requester_id
+        )
+        count_statement = select(func.count()).select_from(AgentApproval).where(
+            AgentApproval.requester_id == requester_id
+        )
+        if status is not None:
+            statement = statement.where(AgentApproval.status == status)
+            count_statement = count_statement.where(
+                AgentApproval.status == status
+            )
+        statement = (
+            statement.order_by(AgentApproval.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        items = list((await self.session.scalars(statement)).all())
+        total = int((await self.session.scalar(count_statement)) or 0)
+        return items, total
+
+    async def get_for_requester(
+        self,
+        *,
+        requester_id: int,
+        approval_id: str,
+    ) -> AgentApproval:
+        record = await self.session.scalar(
+            select(AgentApproval).where(
+                AgentApproval.approval_id == approval_id,
+                AgentApproval.requester_id == requester_id,
+            )
+        )
+        if record is None:
+            raise ResourceNotFoundException(
+                message="Agent approval was not found",
+                code="AGENT_APPROVAL_NOT_FOUND",
+            )
+        return record
+
     async def _locked_pending(self, approval_id: str) -> AgentApproval:
         self._require_admin()
         record = await self.session.scalar(

@@ -30,7 +30,9 @@ const quickPrompts = [
 
 export function AgentChatPage() {
   const { message, modal } = App.useApp();
-  const isAdmin = useAuthStore((state) => state.user?.is_admin ?? false);
+  const canViewTrace = useAuthStore(
+    (state) => Boolean(state.user?.is_admin || state.user?.is_debugger),
+  );
   const [items, setItems] = useState<ChatItem[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -190,7 +192,7 @@ export function AgentChatPage() {
                     ) : null}
                   </div>
                   <Typography.Paragraph className="chat-answer">{item.content}</Typography.Paragraph>
-                  {isAdmin && item.traceId ? (
+                  {canViewTrace && item.traceId ? (
                     <Typography.Text type="secondary" className="agent-trace-link">
                       trace: <Link to={`/agent/debug?trace_id=${item.traceId}`}>{item.traceId}</Link>
                     </Typography.Text>
