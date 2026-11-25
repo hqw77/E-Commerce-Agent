@@ -1,5 +1,6 @@
 import {
   BugOutlined,
+  FileSearchOutlined,
   LogoutOutlined,
   MessageOutlined,
   ShopOutlined,
@@ -21,10 +22,16 @@ const items = [
     icon: <MessageOutlined />,
     label: <Link to="/agent/debug/chat">调试对话</Link>,
   },
+  {
+    key: '/agent/debug/rag',
+    icon: <FileSearchOutlined />,
+    label: <Link to="/agent/debug/rag">RAG 检索诊断</Link>,
+  },
 ];
 
 function selectedKey(pathname: string): string {
   if (pathname.startsWith('/agent/debug/chat')) return '/agent/debug/chat';
+  if (pathname.startsWith('/agent/debug/rag')) return '/agent/debug/rag';
   return '/agent/debug';
 }
 
@@ -51,7 +58,7 @@ export function DebugLayout({ children }: { children?: ReactNode }) {
           <Breadcrumb
             items={[
               { title: <Link to="/agent/debug">Agent 调试台</Link> },
-              { title: selected === '/agent/debug/chat' ? '调试对话' : '执行轨迹' },
+              { title: selected === '/agent/debug/chat' ? '调试对话' : selected === '/agent/debug/rag' ? 'RAG 检索诊断' : '执行轨迹' },
             ]}
           />
           <Space>

@@ -33,6 +33,7 @@ import { KnowledgeListPage } from './pages/knowledge/KnowledgeList';
 import { KnowledgeDetailPage } from './pages/knowledge/KnowledgeDetail';
 import { AgentChatPage } from './pages/agent/AgentChat';
 import { AgentApprovalsPage } from './pages/agent/AgentApprovals';
+import { RagDebugPage } from './pages/agent/RagDebug';
 import { TraceConsolePage } from './pages/agent/TraceConsole';
 
 const queryClient = new QueryClient({
@@ -152,6 +153,7 @@ function AppRoutes() {
       >
         <Route path="/agent/debug" element={<TraceConsolePage />} />
         <Route path="/agent/debug/chat" element={<AgentChatPage />} />
+        <Route path="/agent/debug/rag" element={<RagDebugPage />} />
       </Route>
       <Route path="/" element={<HomeRedirect />} />
       <Route path="*" element={<Navigate to="/shop" replace />} />

@@ -43,7 +43,14 @@ AI 导购 / 客服
 /knowledge       知识库
 /agent           AI 助手
 /agent/approvals Agent 审批中心
-/agent/debug     Agent Trace
+```
+
+### Agent 调试端
+
+```text
+/agent/debug      Agent Trace
+/agent/debug/chat 调试对话
+/agent/debug/rag  RAG 检索诊断
 ```
 
 ## 3. 角色
