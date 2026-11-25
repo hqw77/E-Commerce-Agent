@@ -293,34 +293,34 @@ frontend/src/pages/admin/AgentApprovalDetail.tsx
 
 ## 7. 风险点
 
-1. **现有用户 Confirm 不能直接改成管理员审批**  
+1. **现有用户 Confirm 不能直接改成管理员审批**
    会破坏消费者端已有 Prepare/Confirm 流程和测试。应保留现有用户确认，新增管理员审批路径。
 
-2. **AgentRuntime 当前是短期请求**  
+2. **AgentRuntime 当前是短期请求**
    整体超时约 40 秒，会话锁约 60 秒；审批等待可能长达 24 小时，不能把审批等待放在同一个运行时锁内。
 
-3. **Redis Confirm 当前是消费即删除**  
+3. **Redis Confirm 当前是消费即删除**
    管理员审批需要 list/get/approve/reject/expired，不能简单复用一次性消费结构。
 
-4. **Checkpointer 需要 thread_id**  
+4. **Checkpointer 需要 thread_id**
    当前只有 conversation_id，没有 thread_id；需要后端映射并校验用户归属。
 
-5. **interrupt 前不能有不可逆副作用**  
+5. **interrupt 前不能有不可逆副作用**
    Prepare 阶段只能预检查、生成计划，不能提前取消订单或写库存。
 
-6. **审批期间业务状态会变化**  
+6. **审批期间业务状态会变化**
    恢复后必须重新校验订单/库存/售后状态，不能相信 Prepare 时的快照。
 
-7. **审批审计不能只依赖 Redis**  
+7. **审批审计不能只依赖 Redis**
    需要 MySQL 审批记录；否则 Redis 过期后无法审计。
 
-8. **AgentState 变更会影响测试和 API**  
+8. **AgentState 变更会影响测试和 API**
    需要增量字段和兼容旧字段，不能一次性重写。
 
-9. **Tool 当前不区分角色**  
+9. **Tool 当前不区分角色**
    管理员和普通用户共享 Registry；需要按角色/入口过滤可暴露工具。
 
-10. **Trace 是进程内**  
+10. **Trace 是进程内**
     多实例部署会丢失；调试台只能作为开发观察，不是生产审计。
 
 ## 8. 推荐分阶段顺序
