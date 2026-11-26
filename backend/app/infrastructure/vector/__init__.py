@@ -1,1 +1,4 @@
-"""Infrastructure adapters for vector storage."""
+"""向量存储适配器包.
+
+提供 Qdrant 向量写入, 检索和删除能力.
+"""

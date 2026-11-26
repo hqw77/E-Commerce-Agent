@@ -1,3 +1,16 @@
+"""库存业务 Service.
+
+文件职责:
+- 管理总库存, 预占量和库存流水.
+- 为订单提供预占, 释放, 发货扣减.
+- 为售后和手工调整提供入库/出库.
+- 通过幂等键和原子 UPDATE 处理并发.
+
+核心边界:
+InventoryRepository 只执行 SQL; 本 Service 负责业务校验,
+事务边界和流水一致性.
+"""
+
 from dataclasses import dataclass
 
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -19,22 +32,29 @@ from app.services.transaction import transaction_context
 
 @dataclass(frozen=True)
 class InventoryOperationResult:
-    """Result of an inventory-changing operation."""
+    """一次库存变更的结果.
+
+    Args:
+        transaction: 新写入的库存流水.
+        inventory: 变更后的库存行.
+    """
 
     transaction: InventoryTransaction
     inventory: Inventory
 
 
 class InventoryService:
-    """Business rules for inventory operations and ledger entries."""
+    """库存操作和流水的业务规则."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """绑定当前请求 session 和库存 Repository."""
         self.session = session
         self.repository = InventoryRepository(session)
         self.transaction_repository = InventoryTransactionRepository(session)
 
     @staticmethod
     def _available(inventory: Inventory) -> int:
+        """计算可用库存 = 总量 - 预占量."""
         return inventory.total_quantity - inventory.reserved_quantity
 
     @staticmethod
@@ -47,6 +67,7 @@ class InventoryService:
         reserved_delta: int,
         business_type: str,
     ) -> bool:
+        """判断已存在流水是否与本次幂等请求完全一致."""
         return (
             transaction.sku_id == sku_id
             and transaction.transaction_type == transaction_type
@@ -67,6 +88,7 @@ class InventoryService:
         reserved_delta: int,
         business_type: str,
     ) -> InventoryOperationResult:
+        """复用已存在流水; 参数不一致时返回幂等冲突."""
         if not self._same_fingerprint(
             transaction,
             sku_id=sku_id,
@@ -94,6 +116,7 @@ class InventoryService:
         )
 
     async def get_inventory(self, sku_id: int) -> Inventory:
+        """读取库存, 不存在时抛 404."""
         inventory = await self.repository.get_by_sku_id(sku_id)
 
         if inventory is None:
@@ -111,6 +134,7 @@ class InventoryService:
         page: int,
         page_size: int,
     ) -> tuple[list[InventoryTransaction], int]:
+        """分页读取 SKU 的库存流水."""
         if await self.repository.get_by_sku_id(sku_id) is None:
             raise ResourceNotFoundException(
                 message="Inventory not found",
@@ -140,6 +164,16 @@ class InventoryService:
         require_available: int | None = None,
         require_initial: bool = False,
     ) -> InventoryOperationResult:
+        """执行一次带幂等和行锁的库存变更.
+
+        Returns:
+            库存流水和变更后的库存.
+
+        Raises:
+            ConflictException: 幂等冲突, 并发死锁或可用库存不足.
+            ResourceNotFoundException: 库存不存在.
+        """
+        # ① 先做一次无锁幂等查询, 命中就直接复用.
         existing = await self.transaction_repository.get_by_key(idempotency_key)
 
         if existing is not None:
@@ -154,6 +188,7 @@ class InventoryService:
 
         try:
             async with transaction_context(self.session):
+                # ② 锁库存行后再次查幂等流水, 避免 REPEATABLE READ 下漏看并发提交.
                 inventory = await self.repository.get_by_sku_id_for_update(sku_id)
 
                 if inventory is None:
@@ -197,6 +232,7 @@ class InventoryService:
                     require_available=require_available,
                 )
 
+                # ③ rowcount 为 0 表示库存不足或初始化条件不满足.
                 if rowcount != 1:
                     if require_initial:
                         raise ConflictException(
@@ -210,6 +246,7 @@ class InventoryService:
                     )
 
                 await self.session.refresh(inventory)
+                # ④ 库存更新成功后写入流水, 保存变更前后数量.
                 transaction = await self.transaction_repository.create(
                     sku_id=sku_id,
                     transaction_type=transaction_type,
@@ -229,6 +266,7 @@ class InventoryService:
                 )
 
         except (IntegrityError, OperationalError) as exc:
+            # ⑤ 唯一键冲突或死锁时回滚, 按幂等键重新读取已存在流水.
             is_idempotency_conflict = isinstance(
                 exc, IntegrityError
             ) and "uq_inventory_transactions_idempotency" in str(exc.orig)
@@ -273,6 +311,7 @@ class InventoryService:
         operator_id: int | None,
         remark: str | None,
     ) -> InventoryOperationResult:
+        """首次初始化库存, 要求当前库存和流水都为空."""
         if initial_total <= 0:
             raise ValidationException(
                 message="Initial stock must be greater than zero",
@@ -301,6 +340,7 @@ class InventoryService:
         operator_id: int | None,
         remark: str | None,
     ) -> InventoryOperationResult:
+        """手工入库, 增加总库存并写流水."""
         if quantity <= 0:
             raise ValidationException(
                 message="Stock-in quantity must be greater than zero",
@@ -327,6 +367,7 @@ class InventoryService:
         operator_id: int | None,
         remark: str | None,
     ) -> InventoryOperationResult:
+        """手工出库, 直接从可用库存扣减."""
         if quantity <= 0:
             raise ValidationException(
                 message="Outbound quantity must be greater than zero",
@@ -354,6 +395,7 @@ class InventoryService:
         operator_id: int | None,
         remark: str | None,
     ) -> InventoryOperationResult:
+        """按增量调整总库存, 正负均可, 但不能为零."""
         if quantity_delta == 0:
             raise ValidationException(
                 message="Adjustment delta must not be zero",
@@ -372,6 +414,7 @@ class InventoryService:
         )
 
     async def _locked_inventory(self, sku_id: int) -> Inventory:
+        """锁定库存行, 不存在时抛 404."""
         inventory = await self.repository.get_by_sku_id_for_update(sku_id)
         if inventory is None:
             raise ResourceNotFoundException(
@@ -394,6 +437,7 @@ class InventoryService:
         operator_id: int | None,
         remark: str | None,
     ) -> InventoryTransaction:
+        """在已锁库存的基础上写入一条流水."""
         inventory = await self._locked_inventory(sku_id)
         await self.session.refresh(inventory)
         return await self.transaction_repository.create(
@@ -423,7 +467,7 @@ class InventoryService:
         operator_id: int | None = None,
         remark: str | None = None,
     ) -> InventoryTransaction:
-        """Reserve stock inside the caller's transaction."""
+        """在调用方事务内预占库存, 返回库存流水."""
         if quantity <= 0:
             raise ValidationException(
                 message="Reserve quantity must be greater than zero",
@@ -463,7 +507,7 @@ class InventoryService:
         operator_id: int | None = None,
         remark: str | None = None,
     ) -> InventoryTransaction:
-        """Release a reservation inside the caller's transaction."""
+        """在调用方事务内释放预占, 返回库存流水."""
         if quantity <= 0:
             raise ValidationException(
                 message="Release quantity must be greater than zero",
@@ -503,7 +547,7 @@ class InventoryService:
         operator_id: int | None = None,
         remark: str | None = None,
     ) -> InventoryTransaction:
-        """Convert a reservation into outbound stock."""
+        """把预占转为实际出库, 同时扣减总量和预占量."""
         if quantity <= 0:
             raise ValidationException(
                 message="Outbound quantity must be greater than zero",
@@ -543,7 +587,7 @@ class InventoryService:
         operator_id: int | None = None,
         remark: str | None = None,
     ) -> InventoryTransaction:
-        """Increase total stock inside the caller's transaction."""
+        """在调用方事务内增加总库存, 用于退货入库."""
         if quantity <= 0:
             raise ValidationException(
                 message="Restock quantity must be greater than zero",
@@ -583,7 +627,7 @@ class InventoryService:
         operator_id: int | None = None,
         remark: str | None = None,
     ) -> InventoryTransaction:
-        """Decrease total stock inside the caller's transaction."""
+        """在调用方事务内直接从可用库存出库."""
         if quantity <= 0:
             raise ValidationException(
                 message="Outbound quantity must be greater than zero",

@@ -1,3 +1,15 @@
+"""知识库文档, 版本和 Chunk Repository.
+
+文件职责:
+- 文档/版本的增删查和行锁.
+- 计算下一版本号.
+- 写入/删除权威 Chunk 正文.
+- 提供检索结果的 MySQL 权限回查.
+
+核心边界:
+这里只做 SQL; 文档状态机和文件处理由 KnowledgeDocumentService 负责.
+"""
+
 from collections.abc import Sequence
 
 from sqlalchemy import func, select
@@ -11,9 +23,10 @@ from app.models.knowledge_document_version import KnowledgeDocumentVersion
 
 
 class KnowledgeDocumentRepository:
-    """Database operations for logical knowledge documents."""
+    """知识文档逻辑表的数据库访问对象."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化实例依赖."""
         self.session = session
 
     async def get_by_id(
@@ -23,6 +36,7 @@ class KnowledgeDocumentRepository:
         for_update: bool = False,
         with_versions: bool = False,
     ) -> KnowledgeDocument | None:
+        """按主键读文档, 可预加载版本或加行锁."""
         statement = select(KnowledgeDocument).where(
             KnowledgeDocument.id == document_id
         )
@@ -38,6 +52,7 @@ class KnowledgeDocumentRepository:
         return result.scalar_one_or_none()
 
     async def get_by_title(self, title: str) -> KnowledgeDocument | None:
+        """按唯一标题读取文档."""
         result = await self.session.execute(
             select(KnowledgeDocument).where(KnowledgeDocument.title == title)
         )
@@ -51,6 +66,7 @@ class KnowledgeDocumentRepository:
         visibility: str,
         created_by: int,
     ) -> KnowledgeDocument:
+        """创建 ACTIVE 文档, 只 flush 不 commit."""
         document = KnowledgeDocument(
             title=title,
             description=description,
@@ -65,6 +81,7 @@ class KnowledgeDocumentRepository:
         return document
 
     async def save(self, document: KnowledgeDocument) -> KnowledgeDocument:
+        """刷新文档, 不主动 commit."""
         await self.session.flush()
         await self.session.refresh(document)
         return document
@@ -77,6 +94,10 @@ class KnowledgeDocumentRepository:
         visibility: str | None,
         keyword: str | None,
     ) -> list[ColumnElement[bool]]:
+        """构造可见性, 状态和关键词过滤.
+
+        非管理员固定只能看 ACTIVE + PUBLIC.
+        """
         filters: list[ColumnElement[bool]] = []
 
         if is_admin:
@@ -101,6 +122,7 @@ class KnowledgeDocumentRepository:
         visibility: str | None,
         keyword: str | None,
     ) -> int:
+        """按可见性和过滤条件统计文档数."""
         statement = select(func.count(KnowledgeDocument.id)).where(
             *self._filters(
                 is_admin=is_admin,
@@ -122,6 +144,7 @@ class KnowledgeDocumentRepository:
         page: int,
         page_size: int,
     ) -> Sequence[KnowledgeDocument]:
+        """按可见性和过滤条件分页查询文档."""
         statement = (
             select(KnowledgeDocument)
             .where(
@@ -174,9 +197,10 @@ class KnowledgeDocumentRepository:
 
 
 class KnowledgeVersionRepository:
-    """Database operations for document versions."""
+    """知识文档版本表的数据库访问对象."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化实例依赖."""
         self.session = session
 
     async def get_by_id(
@@ -185,6 +209,7 @@ class KnowledgeVersionRepository:
         *,
         for_update: bool = False,
     ) -> KnowledgeDocumentVersion | None:
+        """按主键读取版本, 可选行锁."""
         statement = select(KnowledgeDocumentVersion).where(
             KnowledgeDocumentVersion.id == version_id
         )
@@ -202,6 +227,7 @@ class KnowledgeVersionRepository:
         *,
         for_update: bool = False,
     ) -> KnowledgeDocumentVersion | None:
+        """按文档和版本读取, 可选行锁."""
         statement = select(KnowledgeDocumentVersion).where(
             KnowledgeDocumentVersion.document_id == document_id,
             KnowledgeDocumentVersion.id == version_id,
@@ -217,6 +243,7 @@ class KnowledgeVersionRepository:
         self,
         document_id: int,
     ) -> Sequence[KnowledgeDocumentVersion]:
+        """按版本号倒序返回文档全部版本."""
         result = await self.session.execute(
             select(KnowledgeDocumentVersion)
             .where(KnowledgeDocumentVersion.document_id == document_id)
@@ -225,6 +252,7 @@ class KnowledgeVersionRepository:
         return list(result.scalars().all())
 
     async def get_next_version_no(self, document_id: int) -> int:
+        """返回当前最大版本号加一."""
         result = await self.session.execute(
             select(func.max(KnowledgeDocumentVersion.version_no)).where(
                 KnowledgeDocumentVersion.document_id == document_id
@@ -244,6 +272,7 @@ class KnowledgeVersionRepository:
         file_size: int,
         file_sha256: str,
     ) -> KnowledgeDocumentVersion:
+        """创建 UPLOADED 版本, 只 flush 不 commit."""
         version = KnowledgeDocumentVersion(
             document_id=document_id,
             version_no=version_no,
@@ -264,21 +293,24 @@ class KnowledgeVersionRepository:
         self,
         version: KnowledgeDocumentVersion,
     ) -> KnowledgeDocumentVersion:
+        """刷新版本, 不主动 commit."""
         await self.session.flush()
         await self.session.refresh(version)
         return version
 
 
 class KnowledgeChunkRepository:
-    """Database operations for authoritative chunk text."""
+    """知识 Chunk 权威正文表的数据库访问对象."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化实例依赖."""
         self.session = session
 
     async def list_by_version(
         self,
         version_id: int,
     ) -> Sequence[KnowledgeChunk]:
+        """按 chunk_index 返回版本下全部 Chunk."""
         result = await self.session.execute(
             select(KnowledgeChunk)
             .where(KnowledgeChunk.version_id == version_id)
@@ -287,6 +319,7 @@ class KnowledgeChunkRepository:
         return list(result.scalars().all())
 
     async def count_by_version(self, version_id: int) -> int:
+        """统计版本下 Chunk 数."""
         result = await self.session.execute(
             select(func.count(KnowledgeChunk.id)).where(
                 KnowledgeChunk.version_id == version_id
@@ -295,6 +328,7 @@ class KnowledgeChunkRepository:
         return int(result.scalar_one())
 
     async def delete_by_version(self, version_id: int) -> None:
+        """删除版本下全部 Chunk, 用于重建索引."""
         chunks = await self.list_by_version(version_id)
         for chunk in chunks:
             await self.session.delete(chunk)
@@ -307,6 +341,7 @@ class KnowledgeChunkRepository:
         version_id: int,
         chunks: Sequence[dict[str, object]],
     ) -> list[KnowledgeChunk]:
+        """批量写入 Chunk 正文, 只 flush 不 commit."""
         models = [
             KnowledgeChunk(
                 document_id=document_id,
@@ -333,7 +368,7 @@ class KnowledgeChunkRepository:
         chunk_ids: Sequence[int],
         is_admin: bool,
     ) -> Sequence[tuple[KnowledgeChunk, KnowledgeDocument, KnowledgeDocumentVersion]]:
-        """MySQL authority check and text fetch for Qdrant-returned chunk IDs."""
+        """用 MySQL 回查 Qdrant chunk_id 的正文和权限."""
         if not chunk_ids:
             return []
 

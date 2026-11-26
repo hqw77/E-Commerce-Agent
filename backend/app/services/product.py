@@ -1,3 +1,15 @@
+"""商品和 SKU 集合 Service.
+
+文件职责:
+- 创建商品并同时创建 SKU.
+- 查询商品详情和分页列表.
+- 校验分类, 商品号格式和状态迁移.
+- 控制激活/停用/归档.
+
+核心边界:
+商品分类必须是启用的叶子分类; 激活前必须有可售 SKU 和库存.
+"""
+
 import re
 from datetime import UTC, datetime
 
@@ -26,17 +38,20 @@ from app.schemas.sku import InventorySummary, SkuDetailResponse
 from app.services.sku import create_sku_record
 from app.services.transaction import transaction_context
 
+# 商品号只允许大写字母, 数字, 下划线和短横线.
 PRODUCT_NO_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9_-]{2,31}$")
 
 
 def _utc_now() -> datetime:
+    """返回与 MySQL 一致的 naive UTC 时间."""
     return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ProductService:
-    """Business rules for products and their SKU collection."""
+    """商品及其 SKU 集合的业务规则."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """绑定当前请求 session 和商品相关 Repository."""
         self.session = session
         self.repository = ProductRepository(session)
         self.category_repository = CategoryRepository(session)
@@ -49,6 +64,7 @@ class ProductService:
         *,
         lock: bool,
     ) -> Category:
+        """校验分类存在, 启用且为叶子分类."""
         category = await self.category_repository.get_by_id(
             category_id,
             for_update=lock,
@@ -76,6 +92,7 @@ class ProductService:
 
     @staticmethod
     def _validate_product_no(product_no: str) -> None:
+        """校验商品号格式."""
         if PRODUCT_NO_PATTERN.fullmatch(product_no) is None:
             raise ValidationException(
                 message="Invalid product number format",
@@ -84,13 +101,16 @@ class ProductService:
 
     @staticmethod
     def _is_product_no_conflict(exc: IntegrityError) -> bool:
+        """判断唯一键冲突是否来自商品号."""
         return "uq_products_product_no" in str(exc.orig)
 
     async def create_product(
         self,
         request: ProductCreateRequest,
     ) -> Product:
+        """创建商品及其 SKU, 全流程同一事务."""
         async with transaction_context(self.session):
+            # ① 锁分类, 校验商品号和唯一性.
             await self._validate_category(
                 request.category_id,
                 lock=True,
@@ -119,6 +139,7 @@ class ProductService:
                     ) from exc
                 raise
 
+            # ② 每个 SKU 同时创建零库存 Inventory.
             for sku_request in request.skus:
                 await create_sku_record(
                     self.session,
@@ -132,6 +153,7 @@ class ProductService:
         self,
         product_id: int,
     ) -> ProductDetailResponse:
+        """按主键返回商品详情和 SKU 库存."""
         product = await self.repository.get_by_id(product_id)
 
         if product is None:
@@ -146,7 +168,7 @@ class ProductService:
         self,
         product_no: str,
     ) -> ProductDetailResponse:
-        """Read-only public lookup used by Agent business tools."""
+        """按商品号读取 ACTIVE 商品, 供 Agent Tool 使用."""
         product = await self.repository.get_by_product_no(product_no)
         if product is None or product.status != "ACTIVE":
             raise ResourceNotFoundException(
@@ -159,6 +181,7 @@ class ProductService:
         self,
         product: Product,
     ) -> ProductDetailResponse:
+        """组装商品基础信息和每个 SKU 的可用库存."""
         rows = await self.sku_repository.list_with_inventory(product.id)
         skus: list[SkuDetailResponse] = []
 
@@ -192,6 +215,7 @@ class ProductService:
         page: int,
         page_size: int,
     ) -> ProductListResponse:
+        """分页查询商品列表."""
         items = await self.repository.list_products(
             status=status,
             category_id=category_id,
@@ -220,6 +244,7 @@ class ProductService:
         description_provided: bool = False,
         image_url_provided: bool = False,
     ) -> Product:
+        """更新商品字段, 分类变更和状态限制都在事务中校验."""
         async with transaction_context(self.session):
             snapshot = await self.repository.get_by_id(product_id)
 
@@ -340,6 +365,7 @@ class ProductService:
                 raise
 
     async def activate_product(self, product_id: int) -> Product:
+        """激活商品, 要求分类启用且所有 ACTIVE SKU 有价格和库存."""
         async with transaction_context(self.session):
             snapshot = await self.repository.get_by_id(product_id)
 
@@ -416,6 +442,7 @@ class ProductService:
             return await self.repository.save(product)
 
     async def deactivate_product(self, product_id: int) -> Product:
+        """把 ACTIVE 商品改为 INACTIVE, 不删除历史数据."""
         async with transaction_context(self.session):
             product = await self.repository.get_by_id(
                 product_id,
@@ -444,6 +471,7 @@ class ProductService:
             return await self.repository.save(product)
 
     async def archive_product(self, product_id: int) -> Product:
+        """归档商品, 归档后不允许再修改."""
         async with transaction_context(self.session):
             product = await self.repository.get_by_id(
                 product_id,

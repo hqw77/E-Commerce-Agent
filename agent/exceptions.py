@@ -1,16 +1,26 @@
-"""Agent-level exceptions for the TASK-006 LLM foundation."""
+"""Agent 层异常定义.
+
+文件职责:
+- 把 LLM, 输入, 会话, 限流和执行错误映射为稳定的 HTTP 错误码.
+- 让 API 层返回统一的 AppException 结构.
+- 避免把供应商原始错误直接暴露给用户.
+
+核心边界:
+异常只描述失败类型, 不包含 prompt, token 或用户隐私.
+"""
 
 from app.core.exceptions import AppException
 
 
 class AgentLLMError(AppException):
-    """Base exception for Agent LLM failures."""
+    """Agent LLM 调用异常基类."""
 
 
 class AgentLLMConfigurationError(AgentLLMError):
-    """Raised when the DeepSeek provider is not configured."""
+    """DeepSeek Provider 未配置 API Key 时抛出."""
 
     def __init__(self, message: str = "DeepSeek LLM is not configured") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="AGENT_LLM_NOT_CONFIGURED",
@@ -19,9 +29,10 @@ class AgentLLMConfigurationError(AgentLLMError):
 
 
 class AgentLLMTimeoutError(AgentLLMError):
-    """Raised when a model call exceeds the configured timeout."""
+    """模型调用超过配置超时时抛出."""
 
     def __init__(self, message: str = "DeepSeek LLM request timed out") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="AGENT_LLM_TIMEOUT",
@@ -30,9 +41,10 @@ class AgentLLMTimeoutError(AgentLLMError):
 
 
 class AgentLLMUnavailableError(AgentLLMError):
-    """Raised when the model provider cannot complete a request."""
+    """模型供应商无法完成请求时抛出."""
 
     def __init__(self, message: str = "DeepSeek LLM is unavailable") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="AGENT_LLM_UNAVAILABLE",
@@ -41,9 +53,10 @@ class AgentLLMUnavailableError(AgentLLMError):
 
 
 class AgentLLMResponseError(AgentLLMError):
-    """Raised when the model returns no usable text."""
+    """模型没有返回可用文本时抛出."""
 
     def __init__(self, message: str = "DeepSeek LLM returned an empty response") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="AGENT_LLM_RESPONSE_INVALID",
@@ -52,9 +65,10 @@ class AgentLLMResponseError(AgentLLMError):
 
 
 class AgentInputInvalidError(AppException):
-    """Raised when the user message is empty or over the input limit."""
+    """用户消息为空或超过输入上限时抛出."""
 
     def __init__(self, message: str = "Agent input is invalid") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="AGENT_INPUT_INVALID",
@@ -63,9 +77,10 @@ class AgentInputInvalidError(AppException):
 
 
 class AgentContextBudgetExceededError(AppException):
-    """Raised when the required latest conversation turn exceeds the budget."""
+    """最新一轮对话已超过上下文预算时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent context budget is exceeded",
             code="AGENT_CONTEXT_BUDGET_EXCEEDED",
@@ -74,9 +89,10 @@ class AgentContextBudgetExceededError(AppException):
 
 
 class AgentConversationNotFoundError(AppException):
-    """Raised when a conversation does not exist or belongs to another user."""
+    """会话不存在或不属于当前用户时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent conversation was not found",
             code="AGENT_CONVERSATION_NOT_FOUND",
@@ -85,9 +101,10 @@ class AgentConversationNotFoundError(AppException):
 
 
 class AgentConversationBusyError(AppException):
-    """Raised when another request currently owns the conversation lock."""
+    """同一会话已有请求持有锁时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent conversation is busy",
             code="AGENT_CONVERSATION_BUSY",
@@ -97,9 +114,10 @@ class AgentConversationBusyError(AppException):
 
 
 class AgentConversationLockLostError(AppException):
-    """Raised when the request no longer owns the conversation lock."""
+    """请求保存时发现会话锁已丢失时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent conversation lock was lost",
             code="AGENT_CONVERSATION_LOCK_LOST",
@@ -108,9 +126,10 @@ class AgentConversationLockLostError(AppException):
 
 
 class AgentConversationUnavailableError(AppException):
-    """Raised when the Redis-backed conversation service is unavailable."""
+    """Redis 会话服务不可用时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent conversation service is unavailable",
             code="AGENT_CONVERSATION_UNAVAILABLE",
@@ -119,9 +138,10 @@ class AgentConversationUnavailableError(AppException):
 
 
 class AgentRateLimitExceededError(AppException):
-    """Raised when the user exceeds the per-minute request limit."""
+    """用户超过每分钟请求限制时抛出."""
 
     def __init__(self, retry_after: int = 60) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent request rate limit exceeded",
             code="AGENT_RATE_LIMITED",
@@ -131,9 +151,10 @@ class AgentRateLimitExceededError(AppException):
 
 
 class AgentRateLimitUnavailableError(AppException):
-    """Raised when the Redis-backed rate limiter is unavailable."""
+    """Redis 限流器不可用时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent rate limiter is unavailable",
             code="AGENT_RATE_LIMIT_UNAVAILABLE",
@@ -142,9 +163,10 @@ class AgentRateLimitUnavailableError(AppException):
 
 
 class AgentExecutionTimeoutError(AppException):
-    """Raised when the complete Agent execution exceeds its deadline."""
+    """整个 Agent 执行超过截止时间时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent execution timed out",
             code="AGENT_EXECUTION_TIMEOUT",
@@ -153,9 +175,10 @@ class AgentExecutionTimeoutError(AppException):
 
 
 class AgentIntentError(AppException):
-    """Raised when intent classification cannot produce a safe result."""
+    """意图分类无法产生安全结果时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent intent classification failed",
             code="AGENT_INTENT_UNAVAILABLE",
@@ -164,9 +187,10 @@ class AgentIntentError(AppException):
 
 
 class AgentOutputRejectedError(AppException):
-    """Raised when output validation rejects a model response."""
+    """输出校验拒绝模型回答时抛出."""
 
     def __init__(self, message: str = "Agent output was rejected") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="AGENT_OUTPUT_REJECTED",
@@ -175,9 +199,10 @@ class AgentOutputRejectedError(AppException):
 
 
 class AgentDisabledError(AppException):
-    """Raised when the Agent is disabled by configuration."""
+    """配置关闭 Agent 时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent is disabled",
             code="AGENT_DISABLED",
@@ -186,9 +211,10 @@ class AgentDisabledError(AppException):
 
 
 class AgentInternalError(AppException):
-    """Raised for an unexpected Agent failure without leaking internals."""
+    """未预期失败且不能泄露内部细节时抛出."""
 
     def __init__(self) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message="Agent internal error",
             code="AGENT_INTERNAL_ERROR",

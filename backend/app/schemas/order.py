@@ -1,3 +1,6 @@
+"""订单请求/响应 Schema.
+
+新订单只使用 CREATED/CANCELLED/COMPLETED."""
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -18,22 +21,26 @@ FulfillmentStatus = Literal["UNSHIPPED", "SHIPPED", "DELIVERED", "COMPLETED"]
 
 
 def _validate_idempotency_key(value: str) -> str:
+    """校验并规范化订单幂等键."""
     if not value.isascii():
         raise ValueError("Idempotency key must be ASCII")
     return value
 
 
 class OrderItemCreateRequest(BaseModel):
+    """下单时的单个 SKU 参数."""
     sku_code: str = Field(min_length=1, max_length=64)
     quantity: int = Field(ge=1, le=999)
 
     @field_validator("sku_code")
     @classmethod
     def normalize_sku_code(cls, value: str) -> str:
+        """规范化 SKU 编码."""
         return value.strip()
 
 
 class OrderCreateRequest(BaseModel):
+    """创建订单参数."""
     items: list[OrderItemCreateRequest] = Field(min_length=1, max_length=50)
     receiver_name: str = Field(min_length=1, max_length=64)
     receiver_phone: str = Field(min_length=1, max_length=32)
@@ -44,10 +51,12 @@ class OrderCreateRequest(BaseModel):
     @field_validator("idempotency_key")
     @classmethod
     def validate_key(cls, value: str) -> str:
+        """校验订单幂等键."""
         return _validate_idempotency_key(value)
 
     @model_validator(mode="after")
     def reject_duplicate_skus(self) -> "OrderCreateRequest":
+        """拒绝同一订单重复 SKU."""
         sku_codes = [item.sku_code for item in self.items]
         if len(sku_codes) != len(set(sku_codes)):
             raise ValueError("Duplicate sku_code is not allowed")
@@ -55,6 +64,7 @@ class OrderCreateRequest(BaseModel):
 
 
 class OrderItemResponse(BaseModel):
+    """订单项响应."""
     model_config = ConfigDict(from_attributes=True)
 
     sku_code: str
@@ -68,6 +78,7 @@ class OrderItemResponse(BaseModel):
 
 
 class OrderResponse(BaseModel):
+    """订单详情响应."""
     model_config = ConfigDict(from_attributes=True)
 
     order_no: str
@@ -90,6 +101,7 @@ class OrderResponse(BaseModel):
 
 
 class OrderListResponse(BaseModel):
+    """订单分页响应."""
     items: list[OrderResponse]
     total: int
     page: int
@@ -97,11 +109,13 @@ class OrderListResponse(BaseModel):
 
 
 class ShipOrderRequest(BaseModel):
+    """发货参数."""
     shipping_carrier: str = Field(min_length=1, max_length=64)
     tracking_no: str = Field(min_length=1, max_length=64)
 
 
 class CompleteOrderResponse(BaseModel):
+    """完成订单响应."""
     order_no: str
     status: OrderStatus
     fulfillment_status: FulfillmentStatus

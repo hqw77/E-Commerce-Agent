@@ -1,3 +1,13 @@
+"""库存 Repository.
+
+文件职责:
+- 以原子 UPDATE 修改 total_quantity 和 reserved_quantity.
+- 提供行锁读取和批量读取.
+
+核心边界:
+Repository 只返回受影响行数, 由 Service 根据 0/1 判断并发冲突.
+"""
+
 from collections.abc import Sequence
 
 from sqlalchemy import select, update
@@ -7,12 +17,14 @@ from app.models.inventory import Inventory
 
 
 class InventoryRepository:
-    """Database operations for inventory rows."""
+    """库存表的数据库访问对象."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化实例依赖."""
         self.session = session
 
     async def get_by_sku_id(self, sku_id: int) -> Inventory | None:
+        """按 SKU 读取库存, 不加锁."""
         statement = select(Inventory).where(Inventory.sku_id == sku_id)
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
@@ -21,6 +33,7 @@ class InventoryRepository:
         self,
         sku_id: int,
     ) -> Inventory | None:
+        """按 SKU 读取并加行锁, 用于需要读后改的库存操作."""
         statement = (
             select(Inventory).where(Inventory.sku_id == sku_id).with_for_update()
         )
@@ -31,6 +44,7 @@ class InventoryRepository:
         self,
         sku_ids: Sequence[int],
     ) -> dict[int, Inventory]:
+        """批量读取库存, 返回 sku_id 到 Inventory 的映射."""
         if not sku_ids:
             return {}
 
@@ -39,6 +53,7 @@ class InventoryRepository:
         return {inventory.sku_id: inventory for inventory in result.scalars().all()}
 
     async def create(self, *, sku_id: int) -> Inventory:
+        """为新 SKU 创建零库存记录."""
         inventory = Inventory(
             sku_id=sku_id,
             total_quantity=0,
@@ -57,6 +72,7 @@ class InventoryRepository:
         absolute: int | None = None,
         require_available: int | None = None,
     ) -> int:
+        """原子更新总库存; 返回 0 表示条件不满足或库存不存在."""
         statement = update(Inventory).where(Inventory.sku_id == sku_id)
 
         if absolute is not None:
@@ -84,6 +100,7 @@ class InventoryRepository:
         return int(getattr(result, "rowcount", 0) or 0)
 
     async def reserve(self, sku_id: int, quantity: int) -> int:
+        """原子预占库存; WHERE 条件保证可用量足够."""
         statement = (
             update(Inventory)
             .where(
@@ -96,6 +113,7 @@ class InventoryRepository:
         return int(getattr(result, "rowcount", 0) or 0)
 
     async def release(self, sku_id: int, quantity: int) -> int:
+        """原子释放预占; 防止 reserved 变成负数."""
         statement = (
             update(Inventory)
             .where(
@@ -108,6 +126,7 @@ class InventoryRepository:
         return int(getattr(result, "rowcount", 0) or 0)
 
     async def deduct_reserved(self, sku_id: int, quantity: int) -> int:
+        """发货时同时扣减总量和预占量."""
         statement = (
             update(Inventory)
             .where(
@@ -124,6 +143,7 @@ class InventoryRepository:
         return int(getattr(result, "rowcount", 0) or 0)
 
     async def restock(self, sku_id: int, quantity: int) -> int:
+        """退货入库时增加总库存."""
         statement = (
             update(Inventory)
             .where(Inventory.sku_id == sku_id)
@@ -133,6 +153,7 @@ class InventoryRepository:
         return int(getattr(result, "rowcount", 0) or 0)
 
     async def direct_outbound(self, sku_id: int, quantity: int) -> int:
+        """不经过预占, 直接从可用库存出库."""
         statement = (
             update(Inventory)
             .where(

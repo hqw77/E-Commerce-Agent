@@ -1,3 +1,4 @@
+"""知识库请求/响应 Schema."""
 from datetime import datetime
 from typing import Literal
 
@@ -81,6 +82,7 @@ class RetrievalRequest(BaseModel):
     @field_validator("query")
     @classmethod
     def normalize_query(cls, value: str) -> str:
+        """清洗检索问题并拒绝空查询."""
         value = value.strip()
 
         if not value:

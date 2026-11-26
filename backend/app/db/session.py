@@ -52,13 +52,13 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Provide an async database session.
+    """提供请求级 AsyncSession, 请求结束后自动关闭.
 
-    The session is automatically closed after the request finishes.
+    Yields:
+        当前请求独立的 AsyncSession.
 
-    get_db 不自动 commit. 原因是一个请求可能包含多个业务写操作,
-    事务边界应由 Service 统一控制, 否则 Repository 各自提交会破坏原子性.
+    注意:
+        get_db 不自动 commit; 事务边界由 Service 通过 transaction_context 控制.
     """
     async with AsyncSessionLocal() as session:
         yield session

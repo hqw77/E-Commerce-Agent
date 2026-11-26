@@ -7,10 +7,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
-    """
-    Base class for all SQLAlchemy ORM models.
+    """所有 ORM 模型的声明式基类.
 
-    All database models should inherit from this class.
-
-    只定义声明式基类, 不在这里放业务字段或通用 mixin.
+    不在这里放业务字段或通用 mixin, 避免所有表被动继承无关列.
     """

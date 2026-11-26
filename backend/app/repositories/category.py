@@ -1,3 +1,14 @@
+"""分类树 Repository.
+
+文件职责:
+- 读取分类和批量行锁.
+- 判断子分类和商品关联.
+- 创建/更新分类.
+
+核心边界:
+只执行 SQL, 不判断分类树业务合法性.
+"""
+
 from collections.abc import Sequence
 
 from sqlalchemy import select
@@ -8,9 +19,10 @@ from app.models.product import Product
 
 
 class CategoryRepository:
-    """Database operations for the category tree."""
+    """分类表的数据库访问对象."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化实例依赖."""
         self.session = session
 
     async def get_by_id(
@@ -19,6 +31,7 @@ class CategoryRepository:
         *,
         for_update: bool = False,
     ) -> Category | None:
+        """按主键读取分类, 可选行锁."""
         statement = select(Category).where(Category.id == category_id)
 
         if for_update:
@@ -31,6 +44,7 @@ class CategoryRepository:
         self,
         category_ids: Sequence[int],
     ) -> list[Category]:
+        """按 ID 升序批量加锁, 固定顺序降低死锁风险."""
         if not category_ids:
             return []
 
@@ -44,6 +58,7 @@ class CategoryRepository:
         return list(result.scalars().all())
 
     async def list_all(self) -> list[Category]:
+        """按父分类和排序号返回完整分类列表."""
         statement = select(Category).order_by(
             Category.parent_id,
             Category.sort_order,
@@ -58,6 +73,7 @@ class CategoryRepository:
         *,
         enabled_only: bool = False,
     ) -> bool:
+        """判断分类是否有子分类, 可只看启用子分类."""
         statement = select(Category.id).where(Category.parent_id == category_id)
 
         if enabled_only:
@@ -72,6 +88,7 @@ class CategoryRepository:
         *,
         status: str | None = None,
     ) -> bool:
+        """判断分类下是否有商品, 可按商品状态过滤."""
         statement = select(Product.id).where(Product.category_id == category_id)
 
         if status is not None:
@@ -87,6 +104,7 @@ class CategoryRepository:
         name: str,
         sort_order: int,
     ) -> Category:
+        """创建分类, 只 flush 不 commit."""
         category = Category(
             parent_id=parent_id,
             name=name,
@@ -105,6 +123,7 @@ class CategoryRepository:
         sort_order: int | None = None,
         status: str | None = None,
     ) -> Category:
+        """按传入的非空字段更新分类."""
         if name is not None:
             category.name = name
         if sort_order is not None:

@@ -1,4 +1,12 @@
-"""User-facing order API without payment endpoints."""
+"""消费者订单 API.
+
+文件职责:
+- 创建订单, 查询自己的订单, 取消未发货订单.
+- 所有接口从 CurrentUser 获取身份, 不接受请求体中的 user_id.
+
+边界:
+当前没有支付接口; 订单创建后直接进入 CREATED/UNSHIPPED.
+"""
 
 from typing import Annotated
 
@@ -25,6 +33,7 @@ async def create_order(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> OrderResponse:
+    """创建订单, 由 Service 负责库存预占和事务."""
     service = OrderService(session)
     order = await service.create_order(user_id=user.id, request=request)
     return order_response(order)
@@ -38,6 +47,7 @@ async def list_orders(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> OrderListResponse:
+    """分页查询当前用户订单."""
     service = OrderService(session)
     items, total = await service.list_orders(
         user_id=user.id,
@@ -63,6 +73,7 @@ async def get_order(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> OrderResponse:
+    """按订单号查询当前用户订单, 越权时按不存在处理."""
     service = OrderService(session)
     order = await service.get_order(user_id=user.id, order_no=order_no)
     return order_response(order)
@@ -79,6 +90,7 @@ async def cancel_order(
     user: CurrentUser,
     reason: Annotated[str | None, Query(max_length=255)] = None,
 ) -> OrderResponse:
+    """取消当前用户的未发货订单并释放库存预占."""
     service = OrderService(session)
     order = await service.cancel_order(
         user_id=user.id,

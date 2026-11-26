@@ -22,6 +22,7 @@ async def list_orders(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> OrderListResponse:
+    """管理员分页查询全部订单."""
     service = OrderService(session)
     items, total = await service.list_admin(
         page=page,
@@ -46,6 +47,7 @@ async def get_order(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> OrderResponse:
+    """管理员查看任意订单详情."""
     service = OrderService(session)
     order = await service.get_order_admin(order_no)
     return order_response(order)
@@ -62,6 +64,7 @@ async def ship_order(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> OrderResponse:
+    """管理员发货并扣减预占库存."""
     service = OrderService(session)
     order = await service.ship(order_no=order_no, request=request)
     return order_response(order)
@@ -77,6 +80,7 @@ async def deliver_order(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> OrderResponse:
+    """管理员确认订单已送达."""
     service = OrderService(session)
     order = await service.deliver(order_no=order_no)
     return order_response(order)
@@ -92,6 +96,7 @@ async def complete_order(
     session: Annotated[AsyncSession, Depends(get_db)],
     _admin: CurrentAdmin,
 ) -> OrderResponse:
+    """管理员完成订单."""
     service = OrderService(session)
     order = await service.complete(order_no=order_no)
     return order_response(order)

@@ -1,8 +1,12 @@
-"""订单模型.
+"""订单 ORM 模型.
 
-orders 保存订单头, 金额汇总以及支付/履约状态. 具体商品快照在 order_items,
-支付在 payments, 售后在 after_sales. 订单状态和履约状态分开建模, 避免把
-支付成功, 发货, 送达混成单一状态.
+文件职责:
+- 保存订单头, 收货信息, 金额汇总和状态时间.
+- 关联订单项, 支付, 售后和退款.
+
+核心边界:
+订单主状态, 支付状态和履约状态分开建模.
+订单项保存下单时的商品/价格快照, 不随后续调价变化.
 """
 
 from datetime import datetime
@@ -27,13 +31,11 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.after_sale import AfterSale
     from app.models.order_item import OrderItem
-    from app.models.payment import Payment
-    from app.models.refund import Refund
     from app.models.user import User
 
 
 class Order(Base):
-    """订单头, 聚合支付, 履约和售后关系."""
+    """订单头, 聚合履约和售后关系."""
 
     __tablename__ = "orders"
 
@@ -181,6 +183,7 @@ class Order(Base):
         nullable=True,
     )
 
+    # 以下时间字段分别记录履约各阶段, 避免用单一 updated_at 推断业务进度.
     shipped_at: Mapped[datetime | None] = mapped_column(
         mysql.DATETIME(fsp=6),
         nullable=True,
@@ -232,6 +235,7 @@ class Order(Base):
         server_default=text("CURRENT_TIMESTAMP(6)"),
     )
 
+    # updated_at 只表示行更新时间, 不能替代业务状态时间.
     updated_at: Mapped[datetime] = mapped_column(
         mysql.DATETIME(fsp=6),
         nullable=False,
@@ -247,15 +251,6 @@ class Order(Base):
         back_populates="order",
     )
 
-    payment: Mapped["Payment | None"] = relationship(
-        back_populates="order",
-        uselist=False,
-    )
-
     after_sales: Mapped[list["AfterSale"]] = relationship(
-        back_populates="order",
-    )
-
-    refunds: Mapped[list["Refund"]] = relationship(
         back_populates="order",
     )

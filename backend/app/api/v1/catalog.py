@@ -1,3 +1,6 @@
+"""消费者商品目录 API.
+
+只暴露 ACTIVE 商品和分类, 不返回后台内部字段."""
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -24,6 +27,7 @@ router = APIRouter()
 async def list_catalog_categories(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[CategoryResponse]:
+    """返回启用分类树."""
     categories = await CategoryService(session).list_categories()
     return [
         CategoryResponse.model_validate(category)
@@ -44,6 +48,7 @@ async def list_catalog_products(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> CatalogProductListResponse:
+    """分页搜索在售商品."""
     product_service = ProductService(session)
     result = await product_service.list_products(
         status="ACTIVE",
@@ -104,6 +109,7 @@ async def get_catalog_product(
     product_no: Annotated[str, Path(min_length=1, max_length=32)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> CatalogProductDetailResponse:
+    """按商品号读取在售商品详情."""
     product_service = ProductService(session)
     detail = await product_service.get_product_detail_by_no(product_no)
     categories = await CategoryService(session).list_categories()

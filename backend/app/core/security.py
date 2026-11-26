@@ -22,12 +22,13 @@ _DUMMY_PASSWORD_HASH = _password_hasher.hash(secrets.token_urlsafe(32))
 
 
 def hash_password(plain_password: str) -> str:
-    """
-    Hash a plain-text password using Argon2id.
+    """用 Argon2id 生成带随机盐的密码哈希.
 
-    A random salt is generated automatically.
+    Args:
+        plain_password: 明文密码.
 
-    每次哈希使用随机盐, 相同密码也会得到不同结果, 因此不能直接比较哈希串.
+    Returns:
+        Argon2id 哈希字符串.
     """
     return _password_hasher.hash(plain_password)
 
@@ -36,13 +37,10 @@ def verify_password(
     plain_password: str,
     password_hash: str,
 ) -> bool:
-    """
-    Verify a plain-text password against a stored password hash.
+    """校验明文密码与存储哈希是否匹配.
 
-    Return False if the password does not match or the stored
-    hash cannot be verified.
-
-    哈希格式损坏时也返回 False, 避免把数据库内部格式泄露给调用方.
+    Returns:
+        True 表示匹配; 哈希损坏或不匹配返回 False.
     """
     try:
         return _password_hasher.verify(
@@ -54,15 +52,9 @@ def verify_password(
 
 
 def verify_dummy_password(plain_password: str) -> bool:
-    """
-    Run a password verification against a fixed dummy hash.
+    """对固定 dummy hash 执行一次真实校验, 用于拉平登录耗时.
 
-    The result is always False. Callers use this to spend the same
-    Argon2id work whether or not the submitted email belongs to a
-    registered user, which avoids leaking account existence through
-    response timing.
-
-    该函数只用于消耗与真实校验相当的计算时间, 调用方必须忽略其布尔返回值.
+    调用方必须忽略返回值; 该函数只用于防用户枚举.
     """
     try:
         _password_hasher.verify(
@@ -76,13 +68,10 @@ def verify_dummy_password(plain_password: str) -> bool:
 
 
 def needs_rehash(password_hash: str) -> bool:
-    """
-    Check whether a password hash needs to be upgraded.
+    """判断存储哈希是否需要按当前 Argon2 参数重算.
 
-    Compare the stored hash parameters with the current
-    PasswordHasher configuration.
-
-    当 Argon2 参数升级后, 可在用户下次登录成功时透明地重算哈希.
+    Returns:
+        True 表示下次登录成功时应透明升级哈希.
     """
     try:
         return _password_hasher.check_needs_rehash(password_hash)

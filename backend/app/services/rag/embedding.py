@@ -1,3 +1,14 @@
+"""BGE-M3 Embedding 提供器.
+
+文件职责:
+- 延迟加载本地 BGE-M3 模型.
+- 批量生成归一化的 1024 维向量.
+- 校验向量数量, 维度和有限值.
+
+核心边界:
+模型加载放在线程中, 避免阻塞事件循环; 失败统一映射为 503.
+"""
+
 import asyncio
 import math
 import os
@@ -11,22 +22,26 @@ from app.core.exceptions import AppException
 
 
 class BgeM3EmbeddingProvider:
-    """Lazy local BAAI/bge-m3 provider with validated 1024-d dense vectors."""
+    """延迟加载的 BGE-M3 本地 Embedding 提供器."""
 
     def __init__(self, settings: Settings) -> None:
+        """保存配置并初始化模型加载锁."""
         self.settings = settings
         self._model: Any | None = None
         self._load_lock = asyncio.Lock()
 
     async def _get_model(self) -> Any:
+        """首次调用时加载模型, 并发请求只加载一次."""
         if self._model is not None:
             return self._model
 
         async with self._load_lock:
+            # ① 双重检查, 防止等待锁期间其他协程已经加载完成.
             if self._model is not None:
                 return self._model
 
             try:
+                # ② 固定 HuggingFace 缓存目录, 避免模型文件散落.
                 cache_dir = str(
                     Path(self.settings.rag_embedding_cache_dir).resolve()
                 )
@@ -40,6 +55,7 @@ class BgeM3EmbeddingProvider:
                     str(Path(cache_dir) / "xet"),
                 )
                 os.environ["HF_HUB_DISABLE_XET"] = "1"
+                # ③ SentenceTransformer 是同步阻塞的, 放到线程中执行.
                 self._model = await asyncio.to_thread(
                     SentenceTransformer,
                     self.settings.rag_embedding_model,
@@ -56,6 +72,7 @@ class BgeM3EmbeddingProvider:
             return self._model
 
     def _validate(self, vectors: list[list[float]], expected: int) -> None:
+        """校验向量数量, 维度和所有值都是有限数."""
         if len(vectors) != expected:
             raise AppException(
                 message="Embedding result count mismatch",
@@ -78,6 +95,14 @@ class BgeM3EmbeddingProvider:
                 )
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """批量生成文档向量.
+
+        Args:
+            texts: 待向量化文本.
+
+        Returns:
+            与输入数量一致的归一化向量列表.
+        """
         if not texts:
             return []
 
@@ -103,5 +128,6 @@ class BgeM3EmbeddingProvider:
         return vectors
 
     async def embed_query(self, text: str) -> list[float]:
+        """生成单条 query 向量."""
         vectors = await self.embed_documents([text])
         return vectors[0]

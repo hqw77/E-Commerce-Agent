@@ -83,6 +83,7 @@ class User(Base):
         nullable=False,
     )
 
+    # 仅用于记录行更新时间, 不承担权限或会话语义.
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.now(),

@@ -1,3 +1,4 @@
+"""认证请求/响应 Schema."""
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
@@ -64,4 +65,5 @@ class UserResponse(BaseModel):
     def normalize_flags(cls, value: object) -> bool:
         # ORM objects that have not been flushed yet may expose None for these
         # server-defaulted columns; treat them as normal users.
+        """把 ORM 权限字段整理成响应结构."""
         return bool(value)

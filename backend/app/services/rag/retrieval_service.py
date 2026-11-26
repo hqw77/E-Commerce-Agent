@@ -1,3 +1,15 @@
+"""知识库稠密检索服务.
+
+文件职责:
+- 先查 MySQL 确认当前用户可检索的文档版本.
+- 用 BGE-M3 生成 query 向量, 在 Qdrant 做带版本过滤的召回.
+- 用 Qdrant 命中的 chunk_id 回查 MySQL, 过滤 stale point.
+- 构造带来源信息的 RetrievalItem.
+
+核心原则:
+Qdrant 只负责相似度召回; MySQL 是 Chunk 正文, 版本和 ACL 的权威源.
+"""
+
 from dataclasses import dataclass
 from typing import Literal
 
@@ -17,7 +29,14 @@ from app.services.rag.embedding import BgeM3EmbeddingProvider
 
 @dataclass(frozen=True, slots=True)
 class RetrievalOutcome:
-    """Retrieved items plus a coarse, non-sensitive diagnostic reason."""
+    """检索结果和粗粒度诊断原因.
+
+    Args:
+        items: 已通过 MySQL 回查的 Chunk.
+        reason: 成功或无结果的稳定原因码.
+        allowed_document_count: 当前用户可见版本数.
+        candidate_count: Qdrant 返回的候选数.
+    """
 
     items: list[RetrievalItem]
     reason: Literal["OK", "NO_ALLOWED_DOCUMENTS", "NO_CANDIDATES"]
@@ -26,7 +45,7 @@ class RetrievalOutcome:
 
 
 class KnowledgeRetrievalService:
-    """Dense retrieval with pre-filtering and authoritative MySQL validation."""
+    """带 ACL 预过滤和 MySQL 回查的稠密检索服务."""
 
     def __init__(
         self,
@@ -36,6 +55,7 @@ class KnowledgeRetrievalService:
         embedding: BgeM3EmbeddingProvider | None = None,
         vector_store: QdrantVectorStore | None = None,
     ) -> None:
+        """初始化检索依赖; 测试可注入 embedding 和 vector store."""
         self.session = session
         self.settings = settings or get_settings()
         self.embedding = embedding or BgeM3EmbeddingProvider(self.settings)
@@ -50,6 +70,16 @@ class KnowledgeRetrievalService:
         query: str,
         top_k: int | None = None,
     ) -> list[RetrievalItem]:
+        """只返回检索结果, 丢弃诊断信息.
+
+        Args:
+            user: 当前用户, 用于 ACL 过滤.
+            query: 用户问题.
+            top_k: 可选返回数量.
+
+        Returns:
+            已通过 MySQL 回查的 RetrievalItem 列表.
+        """
         outcome = await self.retrieve_with_diagnostics(
             user=user,
             query=query,
@@ -64,10 +94,25 @@ class KnowledgeRetrievalService:
         query: str,
         top_k: int | None = None,
     ) -> RetrievalOutcome:
+        """执行完整检索并返回诊断信息.
+
+        Args:
+            user: 当前用户.
+            query: 用户问题.
+            top_k: 可选 Top-K.
+
+        Returns:
+            包含 items 和 reason 的 RetrievalOutcome.
+
+        Raises:
+            AppException: Embedding 或 Qdrant 不可用.
+        """
+        # ① 先限制 Top-K, 防止调用方放大检索量.
         limit = min(
             top_k or self.settings.rag_top_k,
             self.settings.rag_top_k,
         )
+        # ② 从 MySQL 取得当前用户可见的已发布版本.
         allowed = await self.documents.list_retrievable_versions(
             is_admin=user.is_admin,
         )
@@ -81,6 +126,7 @@ class KnowledgeRetrievalService:
 
         version_ids = [version_id for _document_id, version_id in allowed]
         try:
+            # ③ 生成 query 向量, 并只在这些版本内召回.
             query_vector = await self.embedding.embed_query(query)
             candidates = await self.vector_store.search(
                 query_vector=query_vector,
@@ -108,6 +154,7 @@ class KnowledgeRetrievalService:
             )
 
         chunk_ids = [candidate.chunk_id for candidate in candidates]
+        # ④ 用 chunk_id 回查 MySQL, 以 MySQL 正文和 ACL 为准.
         rows = await self.chunks.list_retrieval_rows(
             chunk_ids=chunk_ids,
             is_admin=user.is_admin,
@@ -118,6 +165,7 @@ class KnowledgeRetrievalService:
         }
 
         items: list[RetrievalItem] = []
+        # ⑤ 按 Qdrant 分数顺序构造结果, stale point 直接跳过.
         for candidate in candidates:
             row = by_chunk_id.get(candidate.chunk_id)
             if row is None:

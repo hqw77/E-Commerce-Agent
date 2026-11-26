@@ -1,3 +1,4 @@
+"""库存操作请求/响应 Schema."""
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -12,6 +13,7 @@ class InventoryOperationRequest(BaseModel):
     @field_validator("idempotency_key")
     @classmethod
     def validate_idempotency_key(cls, value: str) -> str:
+        """校验幂等键非空且格式合法."""
         if not value.isascii():
             raise ValueError("Idempotency key must be ASCII")
 
@@ -19,18 +21,22 @@ class InventoryOperationRequest(BaseModel):
 
 
 class InventoryInitializeRequest(InventoryOperationRequest):
+    """库存初始化参数."""
     initial_total: int
 
 
 class StockInRequest(InventoryOperationRequest):
+    """入库参数."""
     quantity: int
 
 
 class StockOutRequest(InventoryOperationRequest):
+    """出库参数."""
     quantity: int
 
 
 class AdjustRequest(InventoryOperationRequest):
+    """库存调整参数."""
     quantity_delta: int
 
 

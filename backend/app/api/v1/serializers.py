@@ -14,6 +14,7 @@ from app.schemas.order import OrderResponse
 
 
 def order_response(order: Order) -> OrderResponse:
+    """把订单 ORM 转成 API 响应."""
     return OrderResponse.model_validate(order)
 
 
@@ -23,6 +24,7 @@ def after_sale_response(
     order: Order,
     item: OrderItem,
 ) -> AfterSaleResponse:
+    """把售后及关联订单项转成 API 响应."""
     return AfterSaleResponse(
         after_sales_no=after_sale.after_sales_no,
         order_no=order.order_no,

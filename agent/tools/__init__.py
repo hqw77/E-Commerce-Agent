@@ -1,4 +1,13 @@
-"""Tool registry factory for TASK-007."""
+"""Agent Tool 注册工厂.
+
+文件职责:
+- 把商品, 订单, 售后和库存 Tool 注册到白名单.
+- 为每个 Tool 绑定参数 Schema 和 READ/PREPARE 类型.
+- 暴露进程级 TOOL_REGISTRY.
+
+核心边界:
+这里只注册能力; 是否允许调用由 Runtime 路由和 ToolExecutor 决定.
+"""
 
 from __future__ import annotations
 
@@ -34,7 +43,9 @@ from agent.tools.schemas import (
 
 
 def build_tool_registry() -> ToolRegistry:
+    """构造完整的 Tool 白名单."""
     registry = ToolRegistry()
+    # READ: 只读查询, 不改变业务状态.
     registry.register(
         RegisteredTool(
             name="search_products",
@@ -107,6 +118,7 @@ def build_tool_registry() -> ToolRegistry:
             handler=get_my_after_sales,
         )
     )
+    # PREPARE: 只生成用户确认或管理员审批计划.
     registry.register(
         RegisteredTool(
             name="prepare_cancel_order",
@@ -146,4 +158,5 @@ def build_tool_registry() -> ToolRegistry:
     return registry
 
 
+# 进程级只读注册表, 导入时构建一次.
 TOOL_REGISTRY = build_tool_registry()

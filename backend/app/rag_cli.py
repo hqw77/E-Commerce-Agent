@@ -21,6 +21,7 @@ from app.services.rag.document_service import KnowledgeDocumentService
 
 
 async def check_consistency() -> int:
+    """检查 MySQL 与 Qdrant 的索引一致性."""
     settings = get_settings()
     vector_store = QdrantVectorStore(settings)
     failures = 0
@@ -57,6 +58,7 @@ async def check_consistency() -> int:
 
 
 async def retry_failed() -> int:
+    """重试失败的文档版本."""
     settings = get_settings()
     vector_store = QdrantVectorStore(settings)
     try:
@@ -96,6 +98,7 @@ async def retry_failed() -> int:
 
 
 async def list_pending() -> int:
+    """列出未完成处理的文档版本."""
     async with AsyncSessionLocal() as session:
         versions = list(
             (
@@ -117,6 +120,7 @@ async def list_pending() -> int:
 
 
 def main() -> None:
+    """RAG 运维 CLI 入口."""
     parser = argparse.ArgumentParser(description="RAG knowledge operations")
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("check", help="check MySQL/Qdrant chunk counts")

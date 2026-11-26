@@ -1,3 +1,4 @@
+"""SKU 请求/响应 Schema."""
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -18,6 +19,7 @@ class SkuCreateRequest(BaseModel):
     @field_validator("sku_code")
     @classmethod
     def normalize_sku_code(cls, value: str) -> str:
+        """规范化 SKU 编码."""
         value = value.strip()
 
         if not value:

@@ -1,4 +1,7 @@
-"""TASK-006 Agent package."""
+"""Agent 包入口.
+
+对外导出 LLM Provider, 异常和消息结构; Graph/Runtime 由内部模块使用.
+"""
 
 from agent.exceptions import (
     AgentLLMConfigurationError,

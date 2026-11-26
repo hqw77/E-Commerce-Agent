@@ -46,7 +46,16 @@ async def chat(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> ChatResponse:
-    """接收用户消息并执行一次 Agent 请求. 用户身份由 CurrentUser 提供."""
+    """接收用户消息并执行一次 Agent 请求.
+
+    Args:
+        request: 消息和可选会话 ID.
+        session: 当前请求数据库会话.
+        user: CurrentUser 注入的可信用户.
+
+    Returns:
+        ChatResponse, 包含回答, 来源和 pending_action.
+    """
     runtime = AgentRuntime(
         session=session,
         user=user,
@@ -93,7 +102,7 @@ async def list_my_approvals(
     page: int = 1,
     page_size: int = 20,
 ) -> AgentApprovalListResponse:
-    """Consumer-scoped approval status; never exposes another user's data."""
+    """查询当前用户自己发起的审批, 不暴露其他人的记录."""
     service = AgentApprovalService(session, user, settings=get_settings())
     items, total = await service.list_for_requester(
         requester_id=user.id,
@@ -119,6 +128,7 @@ async def get_my_approval(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> AgentApprovalResponse:
+    """查询当前用户的一笔审批详情."""
     service = AgentApprovalService(session, user, settings=get_settings())
     record = await service.get_for_requester(
         requester_id=user.id,
@@ -136,7 +146,7 @@ async def get_trace_run(
     trace_id: Annotated[str, Path(min_length=1, max_length=128)],
     _debugger: CurrentDebugger,
 ) -> TraceRunResponse:
-    """Return a redacted trace to the debugger/admin console only."""
+    """返回脱敏 Trace; 只允许管理员或调试人员访问."""
     events = get_trace_buffer().get(trace_id)
     if not events:
         raise ResourceNotFoundException(
@@ -160,7 +170,7 @@ async def confirm_action(
     session: Annotated[AsyncSession, Depends(get_db)],
     user: CurrentUser,
 ) -> ConfirmActionResponse:
-    """确认执行一个已 Prepare 的动作. nonce 和会话 ID 必须与 Redis 中记录匹配."""
+    """确认执行已 Prepare 的用户动作, nonce 与会话必须匹配."""
     service = ConfirmationService(
         session=session,
         user=user,

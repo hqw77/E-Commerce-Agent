@@ -32,7 +32,18 @@ async def get_current_user(
     ],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
-    """从 Bearer Access Token 解析当前用户, 并确认账号仍然有效."""
+    """从 Bearer Access Token 解析当前用户, 并确认账号仍然有效.
+
+    Args:
+        credentials: FastAPI 解析出的 Bearer 凭证.
+        session: 当前请求的数据库会话.
+
+    Returns:
+        当前有效用户 ORM.
+
+    Raises:
+        AuthenticationException: 缺少 token, token 无效或账号不可用.
+    """
 
     if credentials is None:
         raise AuthenticationException(
@@ -60,7 +71,17 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 async def get_current_admin(current_user: CurrentUser) -> User:
-    """在已认证用户之上校验管理员权限, 普通用户返回 403."""
+    """在已认证用户之上校验管理员权限.
+
+    Args:
+        current_user: 已认证用户.
+
+    Returns:
+        同一用户, 仅当 is_admin=True.
+
+    Raises:
+        PermissionDeniedException: 普通用户或调试人员.
+    """
 
     if not current_user.is_admin:
         raise PermissionDeniedException(
@@ -75,7 +96,17 @@ CurrentAdmin = Annotated[User, Depends(get_current_admin)]
 
 
 async def get_current_debugger(current_user: CurrentUser) -> User:
-    """Allow administrators or the dedicated debug role only."""
+    """允许管理员或专用调试角色访问 Trace.
+
+    Args:
+        current_user: 已认证用户.
+
+    Returns:
+        同一用户, 仅当 is_admin 或 is_debugger 为真.
+
+    Raises:
+        PermissionDeniedException: 普通消费者.
+    """
 
     if not current_user.is_admin and not current_user.is_debugger:
         raise PermissionDeniedException(

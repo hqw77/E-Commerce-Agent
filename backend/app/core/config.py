@@ -171,6 +171,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_jwt_configuration(self) -> "Settings":
+        """生产环境要求强 JWT 密钥, 并在启动期校验长度."""
         # 生产环境必须配置足够长的 JWT 密钥, 这是启动前的 fail-fast 校验.
         secret = self.jwt_secret_key.get_secret_value()
 
@@ -184,6 +185,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_agent_lock_configuration(self) -> "Settings":
+        """保证会话锁 TTL 大于执行超时加安全余量."""
         # 会话锁必须在请求执行超时和安全余量之后才过期,
         # 否则锁提前释放可能让同一会话被并发处理.
         lock_seconds = self.agent_conversation_lock_ttl_ms / 1000
@@ -201,13 +203,13 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """
-    Return a cached Settings instance.
+    """返回进程级缓存的 Settings.
 
-    配置在进程内只解析一次, 避免每个请求重复读取 .env 和做校验.
-    测试需要覆盖配置时, 应显式构造 Settings, 不要修改全局单例.
+    配置只解析和校验一次; 测试需要覆盖时显式构造 Settings,
+    不要修改这个全局单例.
     """
     return Settings()
 
 
+# 进程级配置单例; 启动时完成校验.
 settings = get_settings()

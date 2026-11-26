@@ -1,4 +1,14 @@
-"""Request-level Agent runtime: rate limit, lock, timeout, graph invocation."""
+"""Agent 请求级运行时.
+
+文件职责:
+- 为一次聊天请求创建可信 Context.
+- 执行安全检查, 限流, 会话锁和超时控制.
+- 调用编译好的 LangGraph, 并把结果转换成 ChatResult.
+
+核心流程:
+chat -> safety -> rate limit -> conversation lock -> graph.ainvoke
+     -> trace/result -> release lock.
+"""
 
 from __future__ import annotations
 
@@ -42,11 +52,19 @@ from agent.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+# 进程级缓存. 未配置时由 get_agent_llm 延迟创建, 避免导入阶段读取密钥.
 _agent_llm: AgentLLM | None = None
 
 
 def get_agent_llm(settings: Settings | None = None) -> AgentLLM:
-    """Return the process-level provider without creating a key-bearing log."""
+    """返回进程级 Agent LLM.
+
+    Args:
+        settings: 可选的配置覆盖, 测试中可注入.
+
+    Returns:
+        DeepSeek-backed AgentLLM 实例.
+    """
     global _agent_llm
     if _agent_llm is None:
         _agent_llm = DeepSeekLLMProvider(settings or get_settings())
@@ -55,6 +73,18 @@ def get_agent_llm(settings: Settings | None = None) -> AgentLLM:
 
 @dataclass(frozen=True, slots=True)
 class ChatResult:
+    """一次 Agent 聊天的最终结果.
+
+    Args:
+        conversation_id: 会话 ID.
+        message_id: 本次回答消息 ID.
+        answer: 最终回答文本.
+        sources: 后端构造的 RAG 来源.
+        created_at: 结果生成时间.
+        pending_action: 需要用户确认或管理员审批的待办.
+        trace_id: 本次请求的 Trace ID.
+    """
+
     conversation_id: UUID
     message_id: UUID
     answer: str
@@ -65,7 +95,7 @@ class ChatResult:
 
 
 class AgentRuntime:
-    """Owns one request's trusted context and serializes each conversation."""
+    """持有一次请求的可信依赖, 并串行化同一会话."""
 
     def __init__(
         self,
@@ -83,6 +113,10 @@ class AgentRuntime:
         confirmation_store: ConfirmationStore | None = None,
         trace_collector: TraceCollector | None = None,
     ) -> None:
+        """创建一次请求的运行时.
+
+        所有可选参数都用于测试注入; 生产调用通常只传 session 和 user.
+        """
         self.session = session
         self.user = user
         self.settings = settings or get_settings()
@@ -114,6 +148,22 @@ class AgentRuntime:
         message: str,
         conversation_id: UUID | None = None,
     ) -> ChatResult:
+        """执行一次 Agent 聊天请求.
+
+        Args:
+            message: 用户原始消息.
+            conversation_id: 续聊会话 ID; 为空时新建会话.
+
+        Returns:
+            ChatResult, 包含回答, 来源, pending action 和 trace_id.
+
+        Raises:
+            AgentDisabledError: Agent 功能关闭.
+            AgentConversationBusyError: 同一会话已有请求在执行.
+            AgentExecutionTimeoutError: 整张图超过执行时限.
+            AgentInternalError: 未分类的内部错误.
+        """
+        # ① 功能开关, 输入安全和用户级限流.
         if not self.settings.agent_enabled:
             raise AgentDisabledError()
 
@@ -121,6 +171,7 @@ class AgentRuntime:
         normalized = safety_input.message
         await self.rate_limiter.check(self.user.id)
 
+        # ② 为本次会话获取分布式锁, 防止同一会话并发写历史.
         new_conversation = conversation_id is None
         active_conversation_id = conversation_id or new_conversation_id()
         lock_token = uuid4().hex
@@ -131,6 +182,7 @@ class AgentRuntime:
         ):
             raise AgentConversationBusyError()
 
+        # ③ 创建 Trace 和请求级可信 Context.
         request_id = uuid4().hex
         trace_id = request_id
         started_at = datetime.now(UTC)
@@ -159,6 +211,7 @@ class AgentRuntime:
                 else None
             ),
         )
+        # 可信依赖只进入 Context, 不写入可序列化 State.
         context = AgentRuntimeContext(
             request_id=request_id,
             user=self.user,
@@ -174,6 +227,8 @@ class AgentRuntime:
             trace_id=trace_id,
             trace=trace,
         )
+        # ④ 组装 State 和 Context. State 只放可序列化值, Context 放运行期依赖.
+        # 每次请求把身份, 会话和审批默认值写入 State; 运行期对象仍留在 Context.
         initial_state = {
             "request_id": request_id,
             "trace_id": trace_id,
@@ -190,6 +245,7 @@ class AgentRuntime:
         }
 
         try:
+            # ⑤ 用超时包住整张图, 防止单个请求长期占用会话锁.
             async with asyncio.timeout(
                 self.settings.agent_max_execution_seconds
             ):
@@ -246,12 +302,14 @@ class AgentRuntime:
             )
             raise AgentInternalError() from exc
         finally:
+            # ⑥ 无论成功或失败都释放锁, 避免会话永久阻塞.
             await self.conversation_store.release_lock(
                 user_id=self.user.id,
                 conversation_id=active_conversation_id,
                 token=lock_token,
             )
 
+        # ⑦ 记录结束事件并转换成 API 层使用的 ChatResult.
         trace.emit(
             "request_end",
             execution_status="SUCCESS",

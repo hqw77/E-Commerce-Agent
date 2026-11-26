@@ -1,3 +1,4 @@
+"""分类请求/响应 Schema."""
 from datetime import datetime
 from typing import Literal
 
@@ -14,6 +15,7 @@ class CategoryCreateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def normalize_name(cls, value: str) -> str:
+        """去除分类名首尾空白."""
         value = value.strip()
 
         if not value:
@@ -32,6 +34,7 @@ class CategoryUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def normalize_name(cls, value: str | None) -> str | None:
+        """去除更新分类名首尾空白."""
         if value is None:
             return None
 

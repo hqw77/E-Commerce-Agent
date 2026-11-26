@@ -18,6 +18,7 @@ ApprovalStatus = Literal[
 
 
 class AgentApprovalResponse(BaseModel):
+    """审批详情响应."""
     model_config = ConfigDict(from_attributes=True)
 
     approval_id: str
@@ -41,6 +42,7 @@ class AgentApprovalResponse(BaseModel):
 
 
 class AgentApprovalListResponse(BaseModel):
+    """审批分页响应."""
     items: list[AgentApprovalResponse]
     total: int
     page: int
@@ -48,6 +50,7 @@ class AgentApprovalListResponse(BaseModel):
 
 
 class AgentApprovalDecisionRequest(BaseModel):
+    """管理员批准/拒绝参数."""
     model_config = ConfigDict(extra="forbid")
 
     review_note: str | None = Field(default=None, max_length=2000)

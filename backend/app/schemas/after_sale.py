@@ -1,3 +1,6 @@
+"""售后请求/响应 Schema.
+
+当前只允许 EXCHANGE; 历史退款类型仅用于读取."""
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -23,6 +26,7 @@ AfterSaleStatus = Literal[
 
 
 class AfterSaleApplyRequest(BaseModel):
+    """用户换货申请参数."""
     sku_code: str = Field(min_length=1, max_length=64)
     type: AfterSaleRequestType
     reason: str = Field(min_length=1, max_length=255)
@@ -33,12 +37,14 @@ class AfterSaleApplyRequest(BaseModel):
     @field_validator("idempotency_key")
     @classmethod
     def validate_key(cls, value: str) -> str:
+        """校验并规范化幂等键."""
         if not value.isascii():
             raise ValueError("Idempotency key must be ASCII")
         return value
 
 
 class AfterSaleResponse(BaseModel):
+    """售后详情响应."""
     model_config = ConfigDict(from_attributes=True)
 
     after_sales_no: str
@@ -67,6 +73,7 @@ class AfterSaleResponse(BaseModel):
 
 
 class AfterSaleListResponse(BaseModel):
+    """售后分页响应."""
     items: list[AfterSaleResponse]
     total: int
     page: int
@@ -74,18 +81,22 @@ class AfterSaleListResponse(BaseModel):
 
 
 class AfterSaleReviewRequest(BaseModel):
+    """管理员审核通过参数."""
     review_note: str | None = Field(default=None, max_length=500)
 
 
 class AfterSaleRejectRequest(BaseModel):
+    """管理员拒绝参数."""
     review_note: str = Field(min_length=1, max_length=500)
 
 
 class ReturnShipmentRequest(BaseModel):
+    """用户退货物流参数."""
     return_carrier: str = Field(min_length=1, max_length=64)
     return_tracking_no: str = Field(min_length=1, max_length=64)
 
 
 class CompleteExchangeRequest(BaseModel):
+    """换货补发物流参数."""
     replacement_carrier: str = Field(min_length=1, max_length=64)
     replacement_tracking_no: str = Field(min_length=1, max_length=64)

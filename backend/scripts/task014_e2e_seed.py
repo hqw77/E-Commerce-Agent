@@ -44,7 +44,6 @@ from app.models.knowledge_document import KnowledgeDocument
 from app.models.knowledge_document_version import KnowledgeDocumentVersion
 from app.models.order import Order
 from app.models.order_item import OrderItem
-from app.models.payment import Payment
 from app.models.product import Product
 from app.models.refresh_session import RefreshSession
 from app.models.sku import Sku
@@ -298,7 +297,6 @@ async def cleanup() -> None:
         ).scalar_one_or_none()
         if order is not None:
             await session.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
-            await session.execute(delete(Payment).where(Payment.order_id == order.id))
             await session.execute(delete(Order).where(Order.id == order.id))
         sku_id = fixture["sku"]["id"]
         await session.execute(delete(InventoryTransaction).where(InventoryTransaction.sku_id == sku_id))

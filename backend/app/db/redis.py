@@ -52,9 +52,9 @@ async def close_redis() -> None:
 
 
 async def get_redis() -> AsyncGenerator[Redis, None]:
-    """
-    Provide Redis client for FastAPI dependency injection.
+    """提供复用进程连接池的 Redis 客户端.
 
-    这里复用进程级客户端, 不按请求新建连接池. 调用方不应主动 close 该客户端.
+    Yields:
+        进程级 Redis 客户端; 调用方不要 close.
     """
     yield redis_client

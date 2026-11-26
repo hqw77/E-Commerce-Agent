@@ -1,8 +1,12 @@
-"""售后 API.
+"""售后换货 API.
 
-用户侧接口负责申请, 查询, 取消和填写退货物流.
-管理端接口负责审核, 收货和完成换货. 状态流转与退款规则由 AfterSaleService
-统一控制, Router 只做协议转换.
+文件职责:
+- 用户申请, 查询, 取消换货并填写退货物流.
+- 管理员审核, 收货和完成换货补发.
+- Router 只做协议转换, 状态流转和资格校验由 AfterSaleService 负责.
+
+核心边界:
+当前只有 EXCHANGE, 没有退款和资金流.
 """
 
 from typing import Annotated
@@ -110,6 +114,7 @@ async def list_my_after_sales(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> AfterSaleListResponse:
+    """分页查询当前用户全部售后."""
     service = AfterSaleService(session)
     items, total = await service.list_for_user(
         user_id=user.id,
@@ -237,7 +242,7 @@ async def approve_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> AfterSaleResponse:
-    """管理员审核通过. 退款/换货的具体分支由 Service 根据售后类型决定."""
+    """管理员审核通过, 状态进入等待用户寄回."""
     service = AfterSaleService(session)
     after_sale = await service.approve(
         after_sales_no=after_sales_no,
@@ -278,7 +283,7 @@ async def receive_after_sales(
     session: Annotated[AsyncSession, Depends(get_db)],
     admin: CurrentAdmin,
 ) -> AfterSaleResponse:
-    """管理员确认收到退货, 触发后续退款或换货流程."""
+    """管理员确认收到退货, 把退回商品重新入库."""
     service = AfterSaleService(session)
     after_sale = await service.receive(
         after_sales_no=after_sales_no,

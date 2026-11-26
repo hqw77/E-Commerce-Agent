@@ -1,7 +1,12 @@
-"""Transparent LangGraph node instrumentation.
+"""LangGraph 节点的透明 Trace 包装.
 
-The wrapper records node boundaries without changing node outputs, graph edges,
-or Tool/RAG semantics.
+文件职责:
+- 在不改变节点输入输出和边的条件下记录 node_start/node_end/node_error.
+- 把异常映射为稳定 error_code.
+- 从 state 的 intent 推导 Trace 路由标签.
+
+核心边界:
+Trace 只做观测; collector 失败不能影响节点执行.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from langgraph.runtime import Runtime
 from agent.context import AgentRuntimeContext
 from agent.state import AgentState
 
+# 所有 Graph 节点统一的可调用签名.
 NodeCallable = Callable[
     [AgentState, Runtime[AgentRuntimeContext]],
     Awaitable[dict[str, object]],
@@ -23,7 +29,7 @@ NodeCallable = Callable[
 
 
 def route_for_intent(intent: object) -> str | None:
-    """Map the current intent vocabulary to a trace route label."""
+    """把意图映射为调试台使用的路由标签."""
     if intent == "GENERAL":
         return "GENERAL"
     if intent in {"RAG", "KNOWLEDGE"}:
@@ -38,6 +44,7 @@ def route_for_intent(intent: object) -> str | None:
 
 
 def _error_code(exc: Exception) -> str:
+    """把异常映射为 Trace 中的稳定错误码."""
     if isinstance(exc, AppException):
         return exc.code
     if isinstance(exc, TimeoutError):
@@ -46,7 +53,15 @@ def _error_code(exc: Exception) -> str:
 
 
 def instrument_node(name: str, node: NodeCallable) -> NodeCallable:
-    """Return a node wrapper that emits start/end/error trace events."""
+    """包装节点, 在开始, 成功和异常时写 Trace.
+
+    Args:
+        name: 节点名, 写入 node_name.
+        node: 原始 Graph 节点.
+
+    Returns:
+        保持原签名的包装函数.
+    """
 
     @wraps(node)
     async def wrapped(
@@ -57,6 +72,7 @@ def instrument_node(name: str, node: NodeCallable) -> NodeCallable:
         started = time.perf_counter()
         intent = state.get("intent")
         route = route_for_intent(intent)
+        # ① 节点开始; Trace 为空时直接跳过.
         if trace is not None:
             trace.emit(
                 "node_start",
@@ -69,6 +85,7 @@ def instrument_node(name: str, node: NodeCallable) -> NodeCallable:
         try:
             result = await node(state, runtime)
         except Exception as exc:
+            # ② 异常也要记录, 然后原样抛出, 不改变 Graph 错误语义.
             if trace is not None:
                 trace.emit(
                     "node_error",
@@ -84,6 +101,7 @@ def instrument_node(name: str, node: NodeCallable) -> NodeCallable:
                 )
             raise
 
+        # ③ 节点可能更新 intent, 所以用最终 state 重新推导 route.
         final_intent = result.get("intent", intent)
         final_route = route_for_intent(final_intent)
         if trace is not None:

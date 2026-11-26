@@ -1,3 +1,13 @@
+"""订单项 Repository.
+
+文件职责:
+- 创建下单时的商品/价格快照.
+- 按订单或订单项读取, 支持行锁.
+
+核心边界:
+订单项是不可变快照, 不随商品或 SKU 后续修改.
+"""
+
 from decimal import Decimal
 from typing import Any
 
@@ -8,9 +18,10 @@ from app.models.order_item import OrderItem
 
 
 class OrderItemRepository:
-    """Database operations for order line snapshots."""
+    """订单项快照表的数据库访问对象."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """初始化实例依赖."""
         self.session = session
 
     async def create(
@@ -28,6 +39,7 @@ class OrderItemRepository:
         quantity: int,
         line_amount: Decimal,
     ) -> OrderItem:
+        """创建订单项快照, 只 flush 不 commit."""
         item = OrderItem(
             order_id=order_id,
             product_id=product_id,
@@ -47,6 +59,7 @@ class OrderItemRepository:
         return item
 
     async def list_by_order(self, order_id: int) -> list[OrderItem]:
+        """按 SKU ID 顺序读取订单全部明细."""
         statement = (
             select(OrderItem)
             .where(OrderItem.order_id == order_id)
@@ -62,6 +75,7 @@ class OrderItemRepository:
         *,
         for_update: bool = False,
     ) -> OrderItem | None:
+        """按订单和 SKU 读取订单项, 可选行锁."""
         statement = select(OrderItem).where(
             OrderItem.order_id == order_id,
             OrderItem.sku_code == sku_code,
@@ -77,6 +91,7 @@ class OrderItemRepository:
         *,
         for_update: bool = False,
     ) -> OrderItem | None:
+        """按主键读取订单项, 可选行锁."""
         statement = select(OrderItem).where(OrderItem.id == item_id)
         if for_update:
             statement = statement.with_for_update()

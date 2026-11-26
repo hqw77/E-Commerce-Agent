@@ -1,4 +1,15 @@
-"""Node implementations for the TASK-006 LangGraph workflow."""
+"""Agent LangGraph 的节点实现.
+
+文件职责:
+- 每个函数对应 Graph 的一个节点.
+- 读取 State 和 RuntimeContext, 返回局部 State 更新.
+- 不直接访问数据库, 业务操作统一通过 Tool 和 Business Service.
+
+核心流程:
+load_conversation -> classify_intent -> router
+-> general / RAG / Tool / Workflow / unsupported
+-> validate_output -> save_conversation.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +46,7 @@ from agent.tools.context import ToolContext
 
 
 def _token_usage(result: LLMResult | ToolAwareResult) -> TokenUsage:
+    """把 LLM 返回的 Token 字段转换成 AgentState 使用的 TokenUsage."""
     return TokenUsage(
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
@@ -46,6 +58,7 @@ async def load_conversation(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """从 Redis 读取会话历史, 新会话则创建空历史."""
     context = runtime.context
     conversation = await context.conversation_store.load(
         user_id=context.user.id,
@@ -62,6 +75,7 @@ async def classify_intent_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """调用确定性规则和 LLM 识别用户意图."""
     intent = await classify_intent(
         llm=runtime.context.llm,
         message=state["user_message"],
@@ -89,8 +103,9 @@ async def router_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
-    """Materialize the explicit route while keeping the legacy intent."""
+    """把 Intent 规范化为显式 route, 并记录当前用户角色."""
     context = runtime.context
+    # Router 只规范化 route 和 user_role; 具体业务动作由后续节点执行.
     route = state.get("route") or route_name_for_intent(state.get("intent"))
     user_role = "admin" if context.user.is_admin else "user"
     trace = context.trace
@@ -110,6 +125,7 @@ async def general_answer_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """处理不依赖知识库或业务工具的普通对话."""
     context = runtime.context
     selection = select_context(
         history=state.get("history", []),
@@ -136,6 +152,7 @@ async def retrieve_knowledge_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """检索知识 Chunk, 并在进入回答前做证据充分性判断."""
     context = runtime.context
     retrieval = context.retrieval
     retrieval_reason: str | None = None
@@ -156,6 +173,7 @@ async def retrieve_knowledge_node(
         )
         retrieval_reason = "OK" if items else "NO_CANDIDATES"
 
+    # 检索结果先做证据判定, 不满足阈值时不会进入回答节点.
     decision = evaluate_rag_evidence(
         query=state["user_message"],
         items=items,
@@ -209,6 +227,7 @@ async def knowledge_answer_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """只根据已通过证据判断的 RAG 片段生成回答和来源."""
     context = runtime.context
     items = state.get("retrieved_items", [])
     selection = select_context(
@@ -246,6 +265,7 @@ async def unsupported_action_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """对不支持的写操作返回固定说明, 不调用模型和业务工具."""
     return {
         "answer": UNSUPPORTED_ACTION_ANSWER,
         "sources": [],
@@ -257,6 +277,7 @@ async def validate_output_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """统一执行输出安全检查, 防止敏感信息和非法 Source."""
     context = runtime.context
     answer = SafetyPipeline(context.settings).validate_output(
         state.get("answer", ""),
@@ -280,6 +301,7 @@ async def save_conversation_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """在持有会话锁的前提下保存本轮用户和助手消息."""
     context = runtime.context
     created_at_raw = state.get("conversation_created_at")
     created_at = (
@@ -325,11 +347,23 @@ async def _plan_tool(
     route: str,
     node_name: str,
 ) -> dict[str, object]:
+    """让模型从指定 kind 的工具中选择至多一个.
+
+    Args:
+        system_prompt: 工具规划 Prompt.
+        kinds: 允许暴露的工具类型, READ 或 PREPARE.
+        route: Trace 中记录的 route 标签.
+        node_name: 当前节点名.
+
+    Returns:
+        包含 tool_name 和 tool_args 的局部 State; 没有工具时直接返回回答.
+    """
     context = runtime.context
     executor = context.tool_executor
     if executor is None:
         raise RuntimeError("Tool executor is not configured")
 
+    # 规划阶段只选择一个工具, 工具名和参数由 Registry 与 Pydantic 校验.
     result = await context.llm.generate_with_tools(
         system_prompt=system_prompt,
         messages=[
@@ -354,6 +388,7 @@ async def _plan_tool(
             },
         )
     if not result.tool_calls:
+        # 没有工具调用说明模型无法从当前消息中得到明确业务对象, 直接返回提示.
         return {
             "answer": result.text or "请补充要查询或操作的具体业务编号。",
             "sources": [],
@@ -374,6 +409,7 @@ async def plan_tool_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """只向规划器暴露 READ 工具."""
     return await _plan_tool(
         state,
         runtime,
@@ -388,6 +424,7 @@ async def plan_workflow_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """只向规划器暴露 PREPARE 工具, 生成待确认或待审批计划."""
     return await _plan_tool(
         state,
         runtime,
@@ -399,6 +436,7 @@ async def plan_workflow_node(
 
 
 def _confirmation_store(context: AgentRuntimeContext):
+    """读取用户确认存储, 缺失时直接暴露配置错误."""
     store = context.confirmation_store
     if store is None:
         raise RuntimeError("Confirmation store is not configured")
@@ -409,6 +447,10 @@ async def execute_tool_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """执行规划阶段选中的 Tool, 并把结果写回 State.
+
+    这是 Agent 产生业务副作用的唯一节点入口; Tool 内部仍必须经过 Service.
+    """
     context = runtime.context
     executor = context.tool_executor
     if executor is None:
@@ -417,6 +459,7 @@ async def execute_tool_node(
     if not tool_name:
         raise RuntimeError("Tool name is missing")
 
+    # 这里才真正执行 Tool; 写操作仍由 Tool 调用 Business Service.
     result = await executor.execute(
         tool_name,
         state.get("tool_args", {}),
@@ -455,8 +498,13 @@ async def tool_answer_node(
     state: AgentState,
     runtime: Runtime[AgentRuntimeContext],
 ) -> dict[str, object]:
+    """把 ToolResult 转换成面向用户的回答.
+
+    pending action 直接返回待确认/待审批说明; 成功结果再交给模型总结.
+    """
     result = state.get("tool_result") or {}
     pending_action = state.get("pending_action")
+    # 管理员审批与用户确认是两条不同路径; 这里只返回对应的 pending 状态.
     if pending_action:
         if pending_action.get("approval_required"):
             return {
@@ -483,6 +531,7 @@ async def tool_answer_node(
         }
 
     context = runtime.context
+    # 把结构化 Tool 结果交给模型总结, 不允许模型补造缺失字段.
     answer_result = await context.llm.generate(
         system_prompt=TOOL_ANSWER_SYSTEM_PROMPT,
         messages=[],
@@ -500,5 +549,6 @@ async def tool_answer_node(
 
 
 def route_tool_name(state: AgentState) -> str:
+    """有选中工具时执行, 否则直接进入输出校验."""
     return "execute_tool" if state.get("tool_name") else "validate_output"
 

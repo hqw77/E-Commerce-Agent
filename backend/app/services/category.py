@@ -1,3 +1,14 @@
+"""商品分类树 Service.
+
+文件职责:
+- 创建和更新分类.
+- 校验父分类, 子分类和商品关联.
+- 组装分类树.
+
+核心边界:
+分类启用/停用必须保持树结构合法; 有启用子分类或活跃商品时不能停用.
+"""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -10,15 +21,16 @@ from app.schemas.category import CategoryTreeNode
 
 
 class CategoryService:
-    """Business rules for the category tree."""
+    """分类树的业务规则."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """绑定当前请求 session 和分类 Repository."""
         self.session = session
         self.repository = CategoryRepository(session)
 
     @asynccontextmanager
     async def _transaction(self) -> AsyncIterator[None]:
-        """Reuse the request transaction when one is already open."""
+        """复用请求事务; 没有事务时新开一个."""
         if self.session.in_transaction():
             try:
                 yield
@@ -37,7 +49,9 @@ class CategoryService:
         name: str,
         sort_order: int,
     ) -> Category:
+        """创建分类, 校验父分类存在且可挂载子节点."""
         async with self._transaction():
+            # ① 父分类存在且启用; 已有商品的分类不能再挂子分类.
             if parent_id is not None:
                 parent = await self.repository.get_by_id(
                     parent_id,
@@ -76,6 +90,7 @@ class CategoryService:
         sort_order: int | None,
         status: str | None,
     ) -> Category:
+        """更新分类名称, 排序或启用状态."""
         async with self._transaction():
             snapshot = await self.repository.get_by_id(category_id)
 
@@ -142,6 +157,7 @@ class CategoryService:
             )
 
     async def get_category(self, category_id: int) -> Category:
+        """读取分类, 不存在时抛 404."""
         category = await self.repository.get_by_id(category_id)
 
         if category is None:
@@ -153,9 +169,11 @@ class CategoryService:
         return category
 
     async def list_categories(self) -> list[Category]:
+        """返回扁平分类列表."""
         return await self.repository.list_all()
 
     async def list_tree(self) -> list[CategoryTreeNode]:
+        """把扁平分类组装成根节点列表."""
         categories = await self.repository.list_all()
         nodes = {
             category.id: CategoryTreeNode.model_validate(category)

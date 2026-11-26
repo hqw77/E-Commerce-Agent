@@ -1,1 +1,4 @@
-"""RAG knowledge base services."""
+"""RAG 服务包.
+
+包含文档解析, 清洗, 切分, Embedding, 检索和运行时单例.
+"""

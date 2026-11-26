@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     @field_validator("message")
     @classmethod
     def normalize_message(cls, value: str) -> str:
+        """去除消息首尾空白并拒绝空消息."""
         value = value.strip()
         if not value:
             raise ValueError("Message must not be empty")
@@ -27,6 +28,7 @@ class ChatRequest(BaseModel):
 
 
 class SourceResponse(BaseModel):
+    """RAG 来源响应."""
     document_id: int
     version_id: int
     chunk_id: int
@@ -36,6 +38,7 @@ class SourceResponse(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    """Agent 聊天响应."""
     conversation_id: UUID
     message_id: UUID
     answer: str
@@ -46,6 +49,7 @@ class ChatResponse(BaseModel):
 
 
 class TraceEventResponse(BaseModel):
+    """Trace 单事件响应."""
     trace_id: str
     request_id: str
     conversation_id: str
@@ -65,11 +69,13 @@ class TraceEventResponse(BaseModel):
 
 
 class TraceRunResponse(BaseModel):
+    """一次 Trace 的全部事件."""
     trace_id: str
     events: list[TraceEventResponse]
 
 
 class PendingActionResponse(BaseModel):
+    """PREPARE 动作的待确认信息."""
     confirmation_id: str
     nonce: str
     conversation_id: UUID
@@ -85,6 +91,7 @@ class PendingActionResponse(BaseModel):
 
 
 class ConfirmActionRequest(BaseModel):
+    """用户确认动作参数."""
     model_config = ConfigDict(extra="forbid")
 
     conversation_id: UUID
@@ -92,6 +99,7 @@ class ConfirmActionRequest(BaseModel):
 
 
 class ConfirmActionResponse(BaseModel):
+    """确认执行结果."""
     success: bool
     action_type: str
     resource_no: str

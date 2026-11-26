@@ -1,3 +1,4 @@
+"""消费者目录响应 Schema."""
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -23,6 +24,7 @@ class CatalogProductResponse(BaseModel):
 
 
 class CatalogProductListResponse(BaseModel):
+    """目录商品分页响应."""
     items: list[CatalogProductResponse]
     total: int
     page: int

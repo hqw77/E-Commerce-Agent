@@ -1,8 +1,15 @@
-"""Agent high-risk approval service.
+"""Agent 高风险操作审批 Service.
 
-Redis holds the short-lived pending plan; MySQL ``agent_approvals`` is the
-durable audit and state source. The execution path still goes through the
-existing business Service, never directly through SQL in the Agent layer.
+文件职责:
+- 创建库存调整审批计划.
+- 用 Redis 保存短期 pending, 用 MySQL 保存持久化审计.
+- 提供管理员列表, 批准, 拒绝和消费者查询.
+- 批准后恢复审批子图并调用 Business Service 执行.
+
+核心流程:
+create -> MySQL pending + Redis pending + start_approval
+approve -> 锁行 -> 标记 approved -> resume_approval -> 重新校验库存
+       -> InventoryService.adjust -> executed.
 """
 
 from __future__ import annotations
@@ -35,6 +42,7 @@ from app.services.sku import SkuService
 
 logger = logging.getLogger(__name__)
 
+# 审批生命周期; 只有 pending 可以迁移到 approved 或 rejected.
 ApprovalStatus = Literal[
     "pending",
     "approved",
@@ -46,6 +54,7 @@ ApprovalStatus = Literal[
 
 
 def _canonical(value: dict[str, Any]) -> str:
+    """把参数序列化为稳定 JSON, 用于计算 action hash."""
     return json.dumps(
         value,
         ensure_ascii=False,
@@ -55,15 +64,17 @@ def _canonical(value: dict[str, Any]) -> str:
 
 
 def _hash(value: dict[str, Any]) -> str:
+    """计算审批参数的 SHA-256."""
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
 def _utc_now() -> datetime:
+    """返回不带时区信息的 UTC 时间, 与 MySQL DATETIME 保持一致."""
     return datetime.now(UTC).replace(tzinfo=None)
 
 
 class AgentApprovalService:
-    """Create, list, review and execute Agent high-risk approvals."""
+    """创建, 查询, 审批和执行 Agent 高风险计划."""
 
     def __init__(
         self,
@@ -73,6 +84,7 @@ class AgentApprovalService:
         settings: Settings | None = None,
         redis: Redis | None = None,
     ) -> None:
+        """保存当前用户和请求级依赖."""
         self.session = session
         self.user = user
         self.settings = settings or get_settings()
@@ -80,9 +92,11 @@ class AgentApprovalService:
 
     @staticmethod
     def key(approval_id: str) -> str:
+        """返回审批计划在 Redis 中的 key."""
         return f"agent:approval:{approval_id}"
 
     def _require_admin(self) -> None:
+        """校验管理员权限, 普通用户不能查看或审批高风险计划."""
         if not self.user.is_admin:
             raise PermissionDeniedException(
                 message="Administrator privileges are required",
@@ -97,7 +111,24 @@ class AgentApprovalService:
         conversation_id: str,
         thread_id: str,
     ) -> AgentApproval:
-        """Prepare an inventory adjustment; never writes inventory here."""
+        """创建库存调整待审批计划, 不修改库存.
+
+        Args:
+            sku_code: 目标 SKU.
+            quantity_delta: 调整数量, 可以为负.
+            reason: 申请原因.
+            conversation_id: 来源会话.
+            thread_id: 审批子图线程标识.
+
+        Returns:
+            已持久化的 AgentApproval.
+
+        Raises:
+            PermissionDeniedException: 非管理员.
+            ValidationException: 调整量为零.
+            ConflictException: 调整后总量低于已预占量.
+        """
+        # ① 权限和数量预检查.
         self._require_admin()
         if quantity_delta == 0:
             raise ValidationException(
@@ -105,6 +136,7 @@ class AgentApprovalService:
                 code="INVALID_QUANTITY",
             )
 
+        # ② 读取当前库存并检查预占约束.
         sku, _product = await SkuService(self.session).get_sku_by_code(sku_code)
         inventory = await InventoryService(self.session).get_inventory(sku.id)
         new_total = inventory.total_quantity + quantity_delta
@@ -147,6 +179,7 @@ class AgentApprovalService:
             expires_at=now
             + timedelta(seconds=self.settings.agent_approval_ttl_seconds),
         )
+        # ③ 先持久化审计记录, 再写 Redis pending.
         self.session.add(record)
         await self.session.commit()
         await self.session.refresh(record)
@@ -184,6 +217,7 @@ class AgentApprovalService:
                 message="Approval id collision",
                 code="AGENT_APPROVAL_DUPLICATE",
             )
+        # ④ 创建审批子图的暂停状态; 失败时标记审计记录失败.
         try:
             await start_approval(approval_id)
         except Exception as exc:
@@ -207,6 +241,7 @@ class AgentApprovalService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[AgentApproval], int]:
+        """管理员分页查询审批列表, 可按状态过滤."""
         self._require_admin()
         statement = select(AgentApproval)
         count_statement = select(func.count()).select_from(AgentApproval)
@@ -223,6 +258,7 @@ class AgentApprovalService:
         return items, total
 
     async def get(self, approval_id: str) -> AgentApproval:
+        """管理员按 ID 查询审批详情."""
         self._require_admin()
         record = await self.session.scalar(
             select(AgentApproval).where(
@@ -244,7 +280,7 @@ class AgentApprovalService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[AgentApproval], int]:
-        """Consumer-scoped list; never exposes another user's approvals."""
+        """消费者分页查询自己发起的审批, 不能看到其他人的记录."""
         statement = select(AgentApproval).where(
             AgentApproval.requester_id == requester_id
         )
@@ -271,6 +307,7 @@ class AgentApprovalService:
         requester_id: int,
         approval_id: str,
     ) -> AgentApproval:
+        """消费者按 ID 查询自己的审批, 其他用户统一按不存在处理."""
         record = await self.session.scalar(
             select(AgentApproval).where(
                 AgentApproval.approval_id == approval_id,
@@ -285,6 +322,7 @@ class AgentApprovalService:
         return record
 
     async def _locked_pending(self, approval_id: str) -> AgentApproval:
+        """锁定 pending 审批; 已处理或过期记录直接拒绝."""
         self._require_admin()
         record = await self.session.scalar(
             select(AgentApproval)
@@ -311,6 +349,7 @@ class AgentApprovalService:
         return record
 
     async def _mark_failed(self, approval_id: str, code: str) -> None:
+        """把已批准但执行失败的记录标记为 failed, 保留错误码."""
         record = await self.session.scalar(
             select(AgentApproval).where(
                 AgentApproval.approval_id == approval_id,
@@ -327,7 +366,19 @@ class AgentApprovalService:
         *,
         review_note: str | None = None,
     ) -> AgentApproval:
-        """Approve then execute the saved plan through InventoryService."""
+        """批准审批并执行原始计划.
+
+        Args:
+            approval_id: 审批编号.
+            review_note: 管理员备注.
+
+        Returns:
+            执行成功的 AgentApproval.
+
+        Raises:
+            ConflictException: 审批已处理, 已过期, 库存已变化或执行失败.
+        """
+        # ① 行锁确认仍是 pending, 防止并发管理员重复批准.
         record = await self._locked_pending(approval_id)
         if record.operation != "ADJUST_INVENTORY":
             raise ConflictException(
@@ -335,6 +386,7 @@ class AgentApprovalService:
                 code="AGENT_APPROVAL_OPERATION_UNSUPPORTED",
             )
 
+        # ② 先持久化批准决定, 再恢复审批子图.
         record.status = "approved"
         record.approver_id = self.user.id
         record.review_note = review_note
@@ -351,6 +403,7 @@ class AgentApprovalService:
             ) from exc
 
         try:
+            # ③ 恢复后重新读取库存, 不能相信 Prepare 时的快照.
             sku_code = str(record.arguments["sku_code"])
             quantity_delta = int(record.arguments["quantity_delta"])
             sku, _product = await SkuService(self.session).get_sku_by_code(
@@ -365,6 +418,7 @@ class AgentApprovalService:
                     message="Inventory changed while approval was pending",
                     code="AGENT_APPROVAL_STALE",
                 )
+            # ④ 通过 InventoryService 执行, 使用 approval_id 作为幂等键.
             await InventoryService(self.session).adjust(
                 sku_id=sku.id,
                 quantity_delta=quantity_delta,
@@ -381,6 +435,7 @@ class AgentApprovalService:
                 code="AGENT_APPROVAL_EXECUTION_FAILED",
             ) from exc
 
+        # ⑤ 记录 executed 并清理 Redis pending.
         record = await self.session.scalar(
             select(AgentApproval).where(
                 AgentApproval.approval_id == approval_id,
@@ -407,6 +462,16 @@ class AgentApprovalService:
         *,
         review_note: str | None = None,
     ) -> AgentApproval:
+        """拒绝审批, 不执行任何业务写操作.
+
+        Args:
+            approval_id: 审批编号.
+            review_note: 拒绝原因.
+
+        Returns:
+            状态为 rejected 的 AgentApproval.
+        """
+        # ① 行锁确保只有 pending 记录可以拒绝.
         record = await self._locked_pending(approval_id)
         record.status = "rejected"
         record.approver_id = self.user.id
@@ -414,6 +479,7 @@ class AgentApprovalService:
         record.reviewed_at = _utc_now()
         await self.session.commit()
         await self.session.refresh(record)
+        # ② 恢复子图并传入拒绝决定; 即使恢复失败也不会执行业务.
         try:
             await resume_approval(approval_id, approved=False)
         except Exception as exc:  # noqa: BLE001 - durable rejection is final
@@ -422,6 +488,7 @@ class AgentApprovalService:
                 "agent_approval_reject_resume_failed",
                 extra={"approval_id": approval_id, "error": type(exc).__name__},
             )
+        # ③ 清理 Redis pending.
         try:
             await self.redis.delete(self.key(approval_id))
         except RedisError:

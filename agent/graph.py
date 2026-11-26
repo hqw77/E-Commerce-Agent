@@ -1,4 +1,18 @@
-"""Compiled LangGraph StateGraph for TASK-006."""
+"""Agent 主 LangGraph 的装配文件.
+
+文件职责:
+- 注册所有 Node.
+- 连接普通边和条件边.
+- 编译主图供 AgentRuntime 调用.
+
+核心流程:
+START -> load_conversation -> classify_intent -> router
+      -> general / rag / tool / workflow / unsupported
+      -> validate_output -> save_conversation -> END.
+
+运行方式:
+不直接运行本文件. 由 AgentRuntime.chat 调用 COMPILED_AGENT_GRAPH.ainvoke.
+"""
 
 from __future__ import annotations
 
@@ -27,8 +41,14 @@ from agent.state import AgentState
 
 
 def build_agent_graph():
-    """Build the graph once; per-request values arrive through context."""
+    """装配并编译主图.
+
+    Returns:
+        编译后的 LangGraph 对象, 供 AgentRuntime 以 ainvoke 调用.
+    """
     builder = StateGraph(AgentState, context_schema=AgentRuntimeContext)
+
+    # ① 注册节点. instrument_node 透明记录节点开始, 结束和异常.
     builder.add_node(
         "load_conversation",
         instrument_node("load_conversation", load_conversation),
@@ -82,9 +102,11 @@ def build_agent_graph():
         instrument_node("save_conversation", save_conversation_node),
     )
 
+    # ② 固定入口和意图分类, 然后进入显式 Router.
     builder.add_edge(START, "load_conversation")
     builder.add_edge("load_conversation", "classify_intent")
     builder.add_edge("classify_intent", "router")
+    # ③ Router 根据 route 选择 RAG, Tool, Workflow 或普通回答.
     builder.add_conditional_edges(
         "router",
         node_for_route,
@@ -100,6 +122,7 @@ def build_agent_graph():
     builder.add_edge("retrieve_knowledge", "knowledge_answer")
     builder.add_edge("knowledge_answer", "validate_output")
     builder.add_edge("unsupported_action", "validate_output")
+    # ④ Tool 规划可能没有选中工具, 此时直接进入输出校验.
     builder.add_conditional_edges(
         "plan_tool",
         route_tool_name,
@@ -118,9 +141,11 @@ def build_agent_graph():
     )
     builder.add_edge("execute_tool", "tool_answer")
     builder.add_edge("tool_answer", "validate_output")
+    # ⑤ 所有路径最终统一做输出校验并保存会话.
     builder.add_edge("validate_output", "save_conversation")
     builder.add_edge("save_conversation", END)
     return builder.compile()
 
 
+# 主图在进程启动时编译一次; 当前没有配置 checkpointer.
 COMPILED_AGENT_GRAPH = build_agent_graph()

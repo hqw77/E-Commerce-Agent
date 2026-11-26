@@ -25,6 +25,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: AppException,
     ) -> JSONResponse:
+        """把 AppException 映射为统一错误 JSON."""
         # 业务异常是预期内的失败, 只记录错误码和路径, 不记录敏感请求体.
         logger.warning(
             "application_exception",
@@ -48,6 +49,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: StarletteHTTPException,
     ) -> JSONResponse:
+        """把 Starlette HTTPException 映射为统一错误 JSON."""
         # 保留 FastAPI/Starlette 产生的 HTTP 状态码, 但统一响应结构.
         message = (
             exc.detail
@@ -71,6 +73,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        """把 Pydantic 请求校验错误拍平成字段错误列表."""
         # 把 Pydantic 的 loc 拍平成 field 路径, 方便前端定位具体参数.
         errors: list[dict[str, Any]] = [
             {
@@ -96,6 +99,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
+        """兜底异常: 记录堆栈但只返回通用 500."""
         # 兜底处理器只记录服务端日志, 对客户端返回固定文案,
         # 避免 SQL, 文件路径, 密钥等内部信息通过错误响应泄露.
         logger.exception(

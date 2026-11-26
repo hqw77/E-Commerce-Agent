@@ -1,4 +1,13 @@
-"""Read-only product, SKU, and inventory tools."""
+"""商品, SKU 和库存的只读 Agent Tool.
+
+文件职责:
+- 搜索在售商品.
+- 查询商品, SKU 和可用库存.
+- 把 ORM 数据转换成模型安全可读的字典.
+
+核心边界:
+全部为 READ Tool, 不修改商品或库存.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +29,7 @@ from agent.tools.schemas import (
 
 
 def _decimal(value: Any) -> str:
+    """把 Decimal 价格转成字符串, 避免浮点误差."""
     return str(value)
 
 
@@ -27,6 +37,7 @@ async def _find_product(
     service: ProductService,
     product_no: str,
 ) -> Any:
+    """按商品编号读取详情, 统一处理 Service 异常."""
     return await service.get_product_detail_by_no(product_no)
 
 
@@ -34,6 +45,7 @@ async def search_products(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """按关键词搜索 ACTIVE 商品, 返回价格区间."""
     args = SearchProductsInput.model_validate(raw_args.model_dump())
     service = ProductService(context.session)
     result = await service.list_products(
@@ -44,6 +56,7 @@ async def search_products(
         page_size=args.page_size,
     )
     items: list[dict[str, Any]] = []
+    # ① 列表接口不含 SKU, 逐个补充有效 SKU 的价格区间.
     for product in result.items:
         detail = await service.get_product_detail(product.id)
         prices = [sku.price for sku in detail.skus if sku.status == "ACTIVE"]
@@ -75,6 +88,7 @@ async def get_product_detail(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """按商品编号返回商品详情和 SKU 列表."""
     args = GetProductDetailInput.model_validate(raw_args.model_dump())
     detail = await _find_product(ProductService(context.session), args.product_no)
     return ToolResult(
@@ -107,6 +121,7 @@ async def get_sku_detail(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """按 SKU 编码返回规格, 价格和可用库存."""
     args = GetSkuDetailInput.model_validate(raw_args.model_dump())
     sku, product = await SkuService(context.session).get_sku_by_code(args.sku_code)
     inventory = await InventoryService(context.session).get_inventory(sku.id)
@@ -129,6 +144,7 @@ async def check_sku_inventory(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """按 SKU 编码查询可用库存和缺货状态."""
     args = CheckSkuInventoryInput.model_validate(raw_args.model_dump())
     sku, _product = await SkuService(context.session).get_sku_by_code(args.sku_code)
     inventory = await InventoryService(context.session).get_inventory(sku.id)

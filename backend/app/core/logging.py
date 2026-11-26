@@ -1,7 +1,12 @@
 """结构化日志配置.
 
-structlog 负责生成 key-value 事件, 标准 logging 负责输出和级别控制.
-开发环境使用可读 console, 生产环境使用 JSON, 方便日志采集系统解析.
+文件职责:
+- 用 structlog 生成 key-value 事件.
+- 开发环境输出可读 console, 生产环境输出 JSON.
+- 把 trace_id 等上下文自动合并到每条日志.
+
+核心边界:
+日志不得写入密码, Token, Prompt 或完整业务隐私.
 """
 
 import logging
@@ -15,12 +20,11 @@ from app.core.config import settings
 
 def setup_logging() -> None:
     """配置标准 logging 和 structlog, 应用启动时调用一次."""
-
     log_level = settings.log_level
 
     renderer: structlog.types.Processor
 
-    # JSON 便于集中式日志检索, console 便于本地开发阅读.
+    # ① JSON 便于集中式日志检索, console 便于本地开发.
     if settings.log_format == "json":
         renderer = structlog.processors.JSONRenderer()
     else:
@@ -37,7 +41,7 @@ def setup_logging() -> None:
         structlog.processors.format_exc_info,
     ]
 
-    # 统一走标准 logging handler, 这样第三方库和业务日志使用同一输出格式.
+    # ② 第三方库和业务日志统一走标准 logging handler.
     structlog.configure(
         processors=[
             *shared_processors,

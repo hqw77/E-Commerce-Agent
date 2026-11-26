@@ -1,3 +1,14 @@
+"""Qdrant 向量存储适配器.
+
+文件职责:
+- 确保 Collection 和 payload index 存在.
+- 写入, 检索和删除 Chunk 向量.
+- 只保存向量和轻量元数据, 不保存 Chunk 正文.
+
+核心边界:
+Qdrant 是召回层, 不是权限和正文的权威源.
+"""
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,6 +20,16 @@ from app.core.config import Settings
 
 @dataclass(frozen=True)
 class VectorPoint:
+    """一个待写入 Qdrant 的向量点.
+
+    Args:
+        chunk_id: MySQL Chunk ID, 同时作为 Qdrant point ID.
+        vector: 归一化后的向量.
+        document_id: 所属文档 ID.
+        version_id: 所属版本 ID, 检索时用于 ACL 过滤.
+        embedding_model: 生成该向量的模型名.
+    """
+
     chunk_id: int
     vector: list[float]
     document_id: int
@@ -18,6 +39,15 @@ class VectorPoint:
 
 @dataclass(frozen=True)
 class VectorSearchResult:
+    """Qdrant 返回的一个相似度命中.
+
+    Args:
+        chunk_id: 命中的 MySQL Chunk ID.
+        score: 余弦相似度.
+        document_id: payload 中的文档 ID.
+        version_id: payload 中的版本 ID.
+    """
+
     chunk_id: int
     score: float
     document_id: int
@@ -25,9 +55,10 @@ class VectorSearchResult:
 
 
 class QdrantVectorStore:
-    """Qdrant-only vector storage; chunk text remains in MySQL."""
+    """只负责 Qdrant 向量读写的适配器."""
 
     def __init__(self, settings: Settings) -> None:
+        """创建异步 Qdrant 客户端并缓存 Collection 配置."""
         self.collection = settings.rag_collection
         self.embedding_model = settings.rag_embedding_model
         self.dimension = settings.rag_embedding_dimension
@@ -38,6 +69,7 @@ class QdrantVectorStore:
         )
 
     async def ensure_collection(self) -> None:
+        """确保 Collection 维度和 payload index 与当前配置一致."""
         exists = await self.client.collection_exists(self.collection)
         if not exists:
             await self.client.create_collection(
@@ -71,6 +103,7 @@ class QdrantVectorStore:
                 )
 
     async def upsert(self, points: list[VectorPoint]) -> None:
+        """批量写入或覆盖向量点."""
         if not points:
             return
         await self.ensure_collection()
@@ -99,10 +132,21 @@ class QdrantVectorStore:
         version_ids: list[int],
         limit: int,
     ) -> list[VectorSearchResult]:
+        """在允许的版本 ID 内做余弦相似度检索.
+
+        Args:
+            query_vector: 用户问题向量.
+            version_ids: MySQL 已授权的版本 ID.
+            limit: 最大返回数.
+
+        Returns:
+            按分数排序的命中列表.
+        """
         if not version_ids:
             return []
 
         await self.ensure_collection()
+        # ① 在 Qdrant 侧同时过滤版本和 embedding 模型, 避免跨模型混检.
         response = await self.client.query_points(
             collection_name=self.collection,
             query=query_vector,
@@ -136,6 +180,7 @@ class QdrantVectorStore:
         return results
 
     async def count_by_version(self, version_id: int) -> int:
+        """统计某个版本在当前 embedding 模型下的向量数量."""
         await self.ensure_collection()
         result = await self.client.count(
             collection_name=self.collection,
@@ -156,6 +201,7 @@ class QdrantVectorStore:
         return int(result.count)
 
     async def delete_by_version(self, version_id: int) -> None:
+        """删除某个版本的所有向量点."""
         await self.ensure_collection()
         await self.client.delete(
             collection_name=self.collection,
@@ -173,6 +219,7 @@ class QdrantVectorStore:
         )
 
     async def delete_by_document(self, document_id: int) -> None:
+        """删除某个文档所有版本的向量点."""
         await self.ensure_collection()
         await self.client.delete(
             collection_name=self.collection,
@@ -190,6 +237,7 @@ class QdrantVectorStore:
         )
 
     async def health_check(self) -> bool:
+        """检查 Qdrant 是否可访问; 失败时不泄露客户端细节."""
         try:
             await self.client.get_collections()
             return True
@@ -197,4 +245,5 @@ class QdrantVectorStore:
             return False
 
     async def close(self) -> None:
+        """关闭底层 Qdrant 客户端连接."""
         await self.client.close()

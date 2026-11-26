@@ -1,1 +1,4 @@
-"""Infrastructure adapters for the RAG knowledge base."""
+"""文件存储适配器包.
+
+提供 FileStorage 协议和本地文件系统实现.
+"""

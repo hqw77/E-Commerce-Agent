@@ -21,7 +21,14 @@ from app.core.exceptions import (
 
 @dataclass(frozen=True, slots=True)
 class AccessTokenClaims:
-    """从 JWT 中解析并二次校验后的最小 claims 集合."""
+    """从 JWT 中解析并二次校验后的最小 claims 集合.
+
+    Args:
+        user_id: sub 解析出的用户 ID.
+        jti: token 唯一标识.
+        issued_at: 签发时间戳.
+        expires_at: 过期时间戳.
+    """
 
     user_id: int
     jti: str
@@ -33,6 +40,7 @@ class TokenService:
     """Access Token 签发和校验服务."""
 
     def __init__(self, config: Settings | None = None) -> None:
+        """初始化实例依赖."""
         self.config = config or get_settings()
 
         secret = self.config.jwt_secret_key
@@ -52,8 +60,14 @@ class TokenService:
             )
 
     def create_access_token(self, user_id: int) -> str:
-        """签发 Access Token. user_id 必须是正整数, 避免把布尔值当作用户 ID."""
+        """签发 Access Token.
 
+        Args:
+            user_id: 正整数用户 ID.
+
+        Returns:
+            编码后的 JWT 字符串.
+        """
         if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
             raise ValueError("user_id must be a positive integer")
 
@@ -83,8 +97,15 @@ class TokenService:
         )
 
     def decode_access_token(self, token: str) -> AccessTokenClaims:
-        """校验签名, 时间, audience/issuer 和 claims, 返回可信的用户标识."""
+        """校验签名, 时间, audience/issuer 和 claims.
 
+        Returns:
+            可信的 AccessTokenClaims.
+
+        Raises:
+            TokenExpiredException: token 已过期.
+            InvalidTokenException: 签名或 claims 非法.
+        """
         try:
             payload = jwt.decode(
                 token,

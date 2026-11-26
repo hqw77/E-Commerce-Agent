@@ -1,3 +1,4 @@
+"""商品请求/响应 Schema."""
 from datetime import datetime
 from typing import Literal
 
@@ -24,6 +25,7 @@ class ProductCreateRequest(BaseModel):
     @field_validator("product_no", "name")
     @classmethod
     def normalize_text(cls, value: str) -> str:
+        """清洗商品文本字段."""
         value = value.strip()
 
         if not value:
@@ -34,6 +36,7 @@ class ProductCreateRequest(BaseModel):
     @field_validator("image_url")
     @classmethod
     def normalize_image_url(cls, value: str | None) -> str | None:
+        """规范化商品图片 URL."""
         if value is None:
             return None
 
@@ -55,6 +58,7 @@ class ProductUpdateRequest(BaseModel):
     @field_validator("product_no")
     @classmethod
     def normalize_product_no(cls, value: str | None) -> str | None:
+        """规范化商品编号."""
         if value is None:
             return None
 
@@ -68,6 +72,7 @@ class ProductUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def normalize_name(cls, value: str | None) -> str | None:
+        """清洗商品名称."""
         if value is None:
             return None
 
@@ -81,6 +86,7 @@ class ProductUpdateRequest(BaseModel):
     @field_validator("image_url")
     @classmethod
     def normalize_image_url(cls, value: str | None) -> str | None:
+        """规范化更新图片 URL."""
         if value is None:
             return None
 

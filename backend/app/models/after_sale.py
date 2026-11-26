@@ -29,12 +29,11 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.order import Order
     from app.models.order_item import OrderItem
-    from app.models.refund import Refund
     from app.models.user import User
 
 
 class AfterSale(Base):
-    """订单项级售后单, 支持退款, 退货和换货."""
+    """订单项级售后单, 当前只支持换货."""
 
     __tablename__ = "after_sales"
 
@@ -272,10 +271,4 @@ class AfterSale(Base):
 
     receiver: Mapped["User | None"] = relationship(
         foreign_keys=[received_by],
-    )
-
-    # 退款售后会关联一条 Refund; 退货/换货在退款前保持为空.
-    refund: Mapped["Refund | None"] = relationship(
-        back_populates="after_sale",
-        uselist=False,
     )

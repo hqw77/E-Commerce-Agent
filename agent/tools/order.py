@@ -1,4 +1,13 @@
-"""Read-only order and after-sales tools plus Prepare tools."""
+"""订单和售后相关的 Agent Tool.
+
+文件职责:
+- 提供当前用户订单/售后的只读查询.
+- 提供取消订单和申请售后的 PREPARE 工具.
+- 把 ORM 结果转换成模型可读的字典.
+
+核心边界:
+查询必须按当前用户隔离; PREPARE 只生成确认记录, 不直接修改订单或售后.
+"""
 
 from __future__ import annotations
 
@@ -24,14 +33,17 @@ from agent.tools.schemas import (
 
 
 def _iso(value: datetime | None) -> str | None:
+    """把可空 datetime 转成 ISO 字符串."""
     return value.isoformat() if value is not None else None
 
 
 def _money(value: Decimal) -> str:
+    """把 Decimal 金额转成字符串, 避免 JSON 浮点误差."""
     return str(value)
 
 
 def _order_data(order) -> dict[str, Any]:
+    """把 Order ORM 转成 Agent 可读的订单字典."""
     return {
         "order_no": order.order_no,
         "status": order.status,
@@ -60,6 +72,7 @@ def _order_data(order) -> dict[str, Any]:
 
 
 def _after_sale_data(after_sale, order, item) -> dict[str, Any]:
+    """把售后, 订单和订单项组合成模型可读的售后字典."""
     return {
         "after_sales_no": after_sale.after_sales_no,
         "order_no": order.order_no,
@@ -78,6 +91,7 @@ async def list_my_orders(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """查询当前用户订单列表, 支持状态和分页过滤."""
     args = ListMyOrdersInput.model_validate(raw_args.model_dump())
     items, total = await OrderService(context.session).list_orders(
         user_id=context.user.id,
@@ -100,6 +114,7 @@ async def get_my_order(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """查询当前用户的一笔订单, 不暴露其他人的订单."""
     args = GetMyOrderInput.model_validate(raw_args.model_dump())
     order = await OrderService(context.session).get_order(
         user_id=context.user.id,
@@ -112,6 +127,7 @@ async def list_my_after_sales(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """查询当前用户售后列表, 可按订单号过滤."""
     args = ListMyAfterSalesInput.model_validate(raw_args.model_dump())
     service = AfterSaleService(context.session)
     if args.order_no:
@@ -145,6 +161,7 @@ async def get_my_after_sales(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """查询当前用户的一笔售后记录及其订单项."""
     args = GetMyAfterSalesInput.model_validate(raw_args.model_dump())
     after_sale, order, item = await AfterSaleService(
         context.session
@@ -165,6 +182,7 @@ def _offer(
     title: str,
     effect: str,
 ) -> dict[str, Any]:
+    """把 ConfirmationOffer 转成前端 PendingAction 结构."""
     return {
         "confirmation_id": offer.confirmation_id,
         "nonce": offer.nonce,
@@ -182,16 +200,19 @@ async def prepare_cancel_order(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """准备取消订单, 只创建 Redis 确认记录, 不直接取消."""
     args = PrepareCancelOrderInput.model_validate(raw_args.model_dump())
     order = await OrderService(context.session).get_order(
         user_id=context.user.id,
         order_no=args.order_no,
     )
+    # ① 预检查当前状态; 真正取消时 Confirm 还会再次校验.
     if order.status != "CREATED":
         raise ConflictException(
             message="Only unshipped CREATED orders can be cancelled",
             code="ORDER_STATUS_CONFLICT",
         )
+    # ② 生成一次性确认凭证, 业务写入留到 Confirm 阶段.
     offer = await context.confirmation_store.create(
         user_id=context.user.id,
         conversation_id=context.conversation_id,
@@ -217,11 +238,13 @@ async def prepare_create_after_sales(
     context: ToolContext,
     raw_args: BaseModel,
 ) -> ToolResult:
+    """准备申请售后, 只创建 Redis 确认记录, 不直接创建售后."""
     args = PrepareCreateAfterSaleInput.model_validate(raw_args.model_dump())
     order = await OrderService(context.session).get_order(
         user_id=context.user.id,
         order_no=args.order_no,
     )
+    # ① 先确认订单属于当前用户, 具体售后资格由 Confirm 阶段 Service 校验.
     offer = await context.confirmation_store.create(
         user_id=context.user.id,
         conversation_id=context.conversation_id,

@@ -24,6 +24,15 @@ class AppException(Exception):
         details: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
+        """构造统一应用异常.
+
+        Args:
+            message: 可安全展示给客户端的消息.
+            code: 稳定错误码.
+            status_code: HTTP 状态码.
+            details: 安全的结构化附加信息.
+            headers: 额外响应头, 如 WWW-Authenticate.
+        """
         self.message = message
         self.code = code
         self.status_code = status_code
@@ -42,6 +51,7 @@ class BusinessException(AppException):
         code: str = "BUSINESS_ERROR",
         details: dict[str, Any] | None = None,
     ) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code=code,
@@ -59,6 +69,7 @@ class ValidationException(AppException):
         code: str = "VALIDATION_ERROR",
         details: dict[str, Any] | None = None,
     ) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code=code,
@@ -77,6 +88,7 @@ class AuthenticationException(AppException):
         code: str = "AUTHENTICATION_FAILED",
         headers: dict[str, str] | None = None,
     ) -> None:
+        """初始化实例依赖."""
         if headers is None:
             headers = {"WWW-Authenticate": "Bearer"}
 
@@ -93,6 +105,7 @@ class TokenExpiredException(AuthenticationException):
     """Access Token 已过期. 单独分类便于前端触发刷新流程."""
 
     def __init__(self, message: str = "Access token has expired") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="TOKEN_EXPIRED",
@@ -103,6 +116,7 @@ class InvalidTokenException(AuthenticationException):
     """Token 无效, 包括签名错误, claims 不合法和类型错误."""
 
     def __init__(self, message: str = "Invalid access token") -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="INVALID_TOKEN",
@@ -117,6 +131,7 @@ class PermissionDeniedException(AppException):
         message: str = "Permission denied",
         details: dict[str, Any] | None = None,
     ) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code="PERMISSION_DENIED",
@@ -134,6 +149,7 @@ class ResourceNotFoundException(AppException):
         details: dict[str, Any] | None = None,
         code: str = "RESOURCE_NOT_FOUND",
     ) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code=code,
@@ -151,6 +167,7 @@ class ConflictException(AppException):
         details: dict[str, Any] | None = None,
         code: str = "RESOURCE_CONFLICT",
     ) -> None:
+        """初始化实例依赖."""
         super().__init__(
             message=message,
             code=code,

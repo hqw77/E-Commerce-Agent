@@ -13,4 +13,5 @@ def test_single_alembic_head_and_expected_parent() -> None:
     assert len(heads) == 1
     revision = script.get_revision(heads[0])
     assert revision is not None
-    assert revision.down_revision == "9c1d2e3f4a5b"
+    # 当前 head 是清理支付/退款遗留表, 其父版本是 is_debugger 迁移.
+    assert revision.down_revision == "b7c8d9e0f1a2"

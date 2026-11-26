@@ -1,8 +1,14 @@
-"""Order lifecycle without payment.
+"""订单生命周期 Service.
 
-Payment and fund refunds are intentionally out of the current project scope.
-Legacy payment tables/columns remain for historical compatibility, but runtime
-order flows only use CREATED / CANCELLED / COMPLETED plus fulfillment.
+文件职责:
+- 创建订单并预占库存.
+- 取消未发货订单并释放预占.
+- 管理员发货, 送达和完成订单.
+- 处理用户隔离和幂等键.
+
+核心边界:
+当前没有支付和资金退款. 新订单从 CREATED/UNSHIPPED 开始.
+所有状态变更都通过 transaction_context 和库存 Service 完成.
 """
 
 from decimal import Decimal
@@ -25,15 +31,15 @@ from app.services.inventory import InventoryService
 from app.services.transaction import transaction_context
 from app.utils.order import money, new_order_no, request_fingerprint, utc_after, utc_now
 
-# Existing rows may still carry historical PAID status. New rows never use
-# PENDING_PAYMENT or PAID.
+# 历史 PAID 订单仍需支持发货; 新订单不会再进入 PAID 状态.
 LEGACY_SHIPPABLE_STATUSES = {"CREATED", "PAID"}
 
 
 class OrderService:
-    """Order creation, cancellation, shipment and completion rules."""
+    """订单创建, 取消, 发货, 送达和完成规则."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """绑定当前请求 session 和所需 Repository/Service."""
         self.session = session
         self.orders = OrderRepository(session)
         self.items = OrderItemRepository(session)
@@ -44,6 +50,7 @@ class OrderService:
 
     @staticmethod
     def _fingerprint(request: OrderCreateRequest) -> str:
+        """计算下单参数指纹, 用于幂等键冲突检测."""
         return request_fingerprint(
             items=[
                 {"sku_code": item.sku_code, "quantity": item.quantity}
@@ -57,9 +64,11 @@ class OrderService:
 
     @staticmethod
     def _is_idempotency_conflict(exc: IntegrityError) -> bool:
+        """判断 IntegrityError 是否来自订单幂等唯一约束."""
         return "uq_orders_user_idempotency" in str(exc.orig)
 
     async def _detail(self, order_no: str) -> Order:
+        """读取含订单项的订单详情, 不存在时抛 404."""
         order = await self.orders.get_by_no(order_no, with_items=True)
         if order is None:
             raise ResourceNotFoundException(
@@ -75,6 +84,7 @@ class OrderService:
         idempotency_key: str,
         fingerprint: str,
     ) -> Order | None:
+        """命中幂等键时返回旧订单; 参数不同则拒绝复用."""
         existing = await self.orders.get_by_user_and_key(
             user_id,
             idempotency_key,
@@ -92,6 +102,7 @@ class OrderService:
         self,
         request: OrderCreateRequest,
     ) -> list[tuple[Product, Sku, int, Decimal]]:
+        """校验 SKU, 商品和可用库存, 并计算每行金额."""
         lines: list[tuple[Product, Sku, int, Decimal]] = []
         for requested in request.items:
             sku = await self.skus.get_by_code(requested.sku_code)
@@ -134,6 +145,19 @@ class OrderService:
         user_id: int,
         request: OrderCreateRequest,
     ) -> Order:
+        """创建订单并原子预占库存.
+
+        Args:
+            user_id: 下单用户.
+            request: SKU, 数量, 收货信息和幂等键.
+
+        Returns:
+            创建后的订单详情.
+
+        Raises:
+            ConflictException: SKU 不可用, 库存不足或幂等键参数冲突.
+        """
+        # ① 先查幂等键; 同一请求重放直接返回旧订单.
         fingerprint = self._fingerprint(request)
         existing = await self._existing_or_conflict(
             user_id=user_id,
@@ -143,10 +167,12 @@ class OrderService:
         if existing is not None:
             return existing
 
+        # ② 校验 SKU/商品并计算快照金额.
         lines = await self._load_purchase_lines(request)
         total_amount = money(sum((line[3] for line in lines), Decimal("0.00")))
 
         try:
+            # ③ 订单, 订单项和库存预占必须处于同一事务.
             async with transaction_context(self.session):
                 order = Order(
                     order_no=new_order_no(),
@@ -199,6 +225,7 @@ class OrderService:
                         business_item_id=item.id,
                     )
         except IntegrityError as exc:
+            # ④ 并发重放可能同时撞唯一约束, 回滚后按幂等键重新读取.
             await self.session.rollback()
             if not self._is_idempotency_conflict(exc):
                 raise
@@ -218,6 +245,7 @@ class OrderService:
         return await self._detail(order.order_no)
 
     async def get_order(self, *, user_id: int, order_no: str) -> Order:
+        """读取当前用户订单, 越权时按不存在处理."""
         order = await self._detail(order_no)
         if order.user_id != user_id:
             raise ResourceNotFoundException(
@@ -234,6 +262,7 @@ class OrderService:
         page_size: int,
         status: str | None = None,
     ) -> tuple[list[Order], int]:
+        """分页查询当前用户订单和总数."""
         items = await self.orders.list_for_user(
             user_id,
             page=page,
@@ -250,6 +279,7 @@ class OrderService:
         page_size: int,
         status: str | None = None,
     ) -> tuple[list[Order], int]:
+        """管理员分页查询全部订单和总数."""
         items = await self.orders.list_admin(
             page=page,
             page_size=page_size,
@@ -259,6 +289,7 @@ class OrderService:
         return items, total
 
     async def get_order_admin(self, order_no: str) -> Order:
+        """管理员读取任意订单详情."""
         return await self._detail(order_no)
 
     async def _lock_order_for_user(
@@ -267,6 +298,7 @@ class OrderService:
         user_id: int,
         order_no: str,
     ) -> tuple[Order, list]:
+        """锁定当前用户订单并读取订单项, 用于状态变更."""
         order = await self.orders.get_by_no(order_no, for_update=True)
         if order is None or order.user_id != user_id:
             raise ResourceNotFoundException(
@@ -282,7 +314,18 @@ class OrderService:
         order_no: str,
         reason: str | None = None,
     ) -> Order:
+        """取消未发货订单并释放全部库存预占.
+
+        Args:
+            user_id: 下单用户.
+            order_no: 订单号.
+            reason: 可选取消原因.
+
+        Returns:
+            状态为 CANCELLED 的订单.
+        """
         async with transaction_context(self.session):
+            # ① 行锁订单, 并确认订单属于当前用户.
             order, items = await self._lock_order_for_user(
                 user_id=user_id,
                 order_no=order_no,
@@ -292,6 +335,7 @@ class OrderService:
                     message="Only unshipped CREATED orders can be cancelled",
                     code="ORDER_STATUS_CONFLICT",
                 )
+            # ② 逐行释放预占, 幂等键绑定订单项.
             for item in sorted(items, key=lambda value: value.sku_id):
                 await self.inventory.release(
                     sku_id=item.sku_id,
@@ -313,6 +357,7 @@ class OrderService:
         order_no: str,
         request: ShipOrderRequest,
     ) -> Order:
+        """发货: CREATED 订单扣减预占, 历史 PAID 订单不再扣库存."""
         async with transaction_context(self.session):
             order = await self.orders.get_by_no(order_no, for_update=True)
             if order is None:
@@ -349,6 +394,7 @@ class OrderService:
         return await self._detail(order_no)
 
     async def deliver(self, *, order_no: str) -> Order:
+        """把已发货订单标记为已送达; 送达后才允许申请换货."""
         async with transaction_context(self.session):
             order = await self.orders.get_by_no(order_no, for_update=True)
             if order is None:
@@ -370,6 +416,7 @@ class OrderService:
         return await self._detail(order_no)
 
     async def complete(self, *, order_no: str) -> Order:
+        """把已送达订单标记为完成, 订单和履约状态同时变为 COMPLETED."""
         async with transaction_context(self.session):
             order = await self.orders.get_by_no(order_no, for_update=True)
             if order is None:

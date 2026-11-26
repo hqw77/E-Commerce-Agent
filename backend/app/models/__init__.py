@@ -14,10 +14,8 @@ from app.models.knowledge_document import KnowledgeDocument
 from app.models.knowledge_document_version import KnowledgeDocumentVersion
 from app.models.order import Order
 from app.models.order_item import OrderItem
-from app.models.payment import Payment
 from app.models.product import Product
 from app.models.refresh_session import RefreshSession
-from app.models.refund import Refund
 from app.models.sku import Sku
 from app.models.user import User
 
@@ -32,10 +30,8 @@ __all__ = [
     "KnowledgeDocumentVersion",
     "Order",
     "OrderItem",
-    "Payment",
     "Product",
     "RefreshSession",
-    "Refund",
     "Sku",
     "User",
 ]

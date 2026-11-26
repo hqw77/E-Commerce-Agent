@@ -1,4 +1,14 @@
-"""DeepSeek LLM provider built on LangChain's ChatOpenAI adapter."""
+"""DeepSeek LLM Provider.
+
+文件职责:
+- 用 LangChain ChatOpenAI 适配 DeepSeek OpenAI 兼容接口.
+- 统一普通对话和 Tool Calling 的返回结构.
+- 处理超时, 供应商异常和 token 用量.
+- 允许测试注入 fake chat model, 不访问网络.
+
+核心边界:
+Provider 只负责模型调用; 权限, 工具白名单和业务状态由 Graph/Executor 处理.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +36,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class ConversationMessage:
-    """A model-visible history message; identity is never stored here."""
+    """模型可见的历史消息.
+
+    Args:
+        role: user 或 assistant.
+        content: 消息文本; 不包含用户身份.
+    """
 
     role: Literal["user", "assistant"]
     content: str
@@ -34,7 +49,14 @@ class ConversationMessage:
 
 @dataclass(frozen=True, slots=True)
 class LLMResult:
-    """Normalized text and token usage returned by the provider."""
+    """普通模型调用的归一化结果.
+
+    Args:
+        text: 模型文本.
+        input_tokens: 输入 token 数.
+        output_tokens: 输出 token 数.
+        total_tokens: 总 token 数.
+    """
 
     text: str
     input_tokens: int
@@ -44,7 +66,13 @@ class LLMResult:
 
 @dataclass(frozen=True, slots=True)
 class ToolCall:
-    """One tool invocation requested by the model."""
+    """模型请求的一次工具调用.
+
+    Args:
+        name: 工具名.
+        args: 模型生成的参数.
+        id: 供应商返回的调用 ID.
+    """
 
     name: str
     args: dict[str, Any]
@@ -53,7 +81,15 @@ class ToolCall:
 
 @dataclass(frozen=True, slots=True)
 class ToolAwareResult:
-    """Model text plus any tool calls, with normalized token usage."""
+    """带 Tool Calls 的模型结果.
+
+    Args:
+        text: 模型文本, 可能为空.
+        tool_calls: 模型请求的工具调用.
+        input_tokens: 输入 token 数.
+        output_tokens: 输出 token 数.
+        total_tokens: 总 token 数.
+    """
 
     text: str
     tool_calls: list[ToolCall]
@@ -63,6 +99,7 @@ class ToolAwareResult:
 
 
 def _as_int(value: Any) -> int:
+    """把 token 用量安全转换为非负整数."""
     try:
         return max(int(value), 0)
     except (TypeError, ValueError):
@@ -70,6 +107,7 @@ def _as_int(value: Any) -> int:
 
 
 def _content_text(content: Any) -> str:
+    """兼容字符串和 LangChain content block 列表两种返回格式."""
     if isinstance(content, str):
         return content
 
@@ -88,10 +126,10 @@ def _content_text(content: Any) -> str:
 
 
 class DeepSeekLLMProvider:
-    """Async DeepSeek chat model adapter.
+    """DeepSeek 异步聊天模型适配器.
 
-    The provider owns configuration validation and model initialization.
-    A test model can be injected without an API key or network access.
+    Provider 负责配置校验, 模型初始化和调用超时.
+    测试可以注入 BaseChatModel, 不需要 API Key 或网络.
     """
 
     def __init__(
@@ -100,19 +138,23 @@ class DeepSeekLLMProvider:
         *,
         chat_model: BaseChatModel | None = None,
     ) -> None:
+        """保存配置并初始化模型; 注入模型优先于真实 DeepSeek."""
         self.settings = settings or get_settings()
         self._model = chat_model or self._build_model()
         self._timeout_seconds = float(self.settings.agent_llm_timeout_seconds)
 
     @property
     def model_name(self) -> str:
+        """当前模型名, 仅用于日志."""
         return self.settings.deepseek_model
 
     @property
     def base_url(self) -> str:
+        """DeepSeek 兼容接口地址."""
         return self.settings.deepseek_base_url
 
     def _build_model(self) -> BaseChatModel:
+        """校验 API Key 并构造 ChatOpenAI 客户端."""
         api_key = self.settings.deepseek_api_key.get_secret_value()
         if not api_key:
             raise AgentLLMConfigurationError()
@@ -137,7 +179,24 @@ class DeepSeekLLMProvider:
         user_message: str,
         max_output_tokens: int | None = None,
     ) -> LLMResult:
-        """Invoke DeepSeek and normalize the response and usage metadata."""
+        """调用 DeepSeek 并归一化文本和 token 用量.
+
+        Args:
+            system_prompt: 系统指令.
+            messages: 受控历史消息.
+            user_message: 当前用户问题.
+            max_output_tokens: 可选本次输出上限.
+
+        Returns:
+            LLMResult.
+
+        Raises:
+            AgentLLMConfigurationError: Prompt 为空或输出上限非法.
+            AgentLLMTimeoutError: 模型调用超时.
+            AgentLLMUnavailableError: 供应商调用失败.
+            AgentLLMResponseError: 返回文本为空.
+        """
+        # ① 在调用前校验配置, 不把空 Prompt 发给供应商.
         if not system_prompt.strip():
             raise AgentLLMConfigurationError("System prompt must not be empty")
         if not user_message.strip():
@@ -153,6 +212,7 @@ class DeepSeekLLMProvider:
                 "max_output_tokens must be greater than zero"
             )
 
+        # ② 把内部消息类型转换为 LangChain 消息.
         langchain_messages: list[Any] = [SystemMessage(content=system_prompt)]
         for message in messages:
             if message.role == "user":
@@ -172,6 +232,7 @@ class DeepSeekLLMProvider:
         )
         started = time.perf_counter()
 
+        # ③ 用 wait_for 实现 Provider 级超时, 不依赖 HTTP 客户端默认值.
         try:
             response = await asyncio.wait_for(
                 model.ainvoke(langchain_messages),
@@ -190,10 +251,12 @@ class DeepSeekLLMProvider:
             )
             raise AgentLLMUnavailableError() from exc
 
+        # ④ 空文本视为不可用回答, 避免上层把空字符串写入历史.
         text = _content_text(getattr(response, "content", "")).strip()
         if not text:
             raise AgentLLMResponseError()
 
+        # ⑤ 兼容 usage_metadata 和供应商原始 token_usage 两种字段.
         usage = getattr(response, "usage_metadata", None) or {}
         response_metadata = getattr(response, "response_metadata", None) or {}
         token_usage = response_metadata.get("token_usage") or {}
@@ -244,7 +307,14 @@ class DeepSeekLLMProvider:
         tools: Sequence[dict[str, Any]],
         max_output_tokens: int | None = None,
     ) -> ToolAwareResult:
-        """Invoke the model with only the caller-provided tool schemas."""
+        """带 Tool Schema 调用模型.
+
+        只使用调用方传入的 tools, 不接受模型自行扩展工具集合.
+
+        Returns:
+            ToolAwareResult, 可能只有 tool_calls 没有文本.
+        """
+        # ① 与普通生成共享基础校验.
         if not system_prompt.strip():
             raise AgentLLMConfigurationError("System prompt must not be empty")
         if not user_message.strip():
@@ -263,6 +333,7 @@ class DeepSeekLLMProvider:
                 langchain_messages.append(AIMessage(content=message.content))
         langchain_messages.append(HumanMessage(content=user_message))
 
+        # ② bind_tools 只暴露白名单 Schema; extra_body 固定 max_tokens.
         model = self._model.bind_tools(list(tools)).bind(
             extra_body={"max_tokens": output_limit},
         )
@@ -280,6 +351,7 @@ class DeepSeekLLMProvider:
             )
             raise AgentLLMUnavailableError() from exc
 
+        # ③ 只保留结构合法的 tool call, 参数非 dict 时退化为空.
         raw_calls = getattr(response, "tool_calls", None) or []
         parsed_calls: list[ToolCall] = []
         for raw in raw_calls:
@@ -298,6 +370,7 @@ class DeepSeekLLMProvider:
         if not text and not parsed_calls:
             raise AgentLLMResponseError()
 
+        # ④ 统一 token 统计, 缺失时用输入加输出兜底.
         usage = getattr(response, "usage_metadata", None) or {}
         response_metadata = getattr(response, "response_metadata", None) or {}
         token_usage = response_metadata.get("token_usage") or {}
@@ -325,5 +398,5 @@ class DeepSeekLLMProvider:
         )
 
 
-# Design-facing alias; the concrete adapter is DeepSeek-specific.
+# 设计层别名; 具体实现是 DeepSeek 适配器.
 AgentLLM = DeepSeekLLMProvider
