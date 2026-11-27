@@ -1,66 +1,76 @@
-# 14 JWT 与 RBAC 代码阅读与面试总结
+# 14 JWT 与 RBAC 简化版教程
 
-这篇文档只回答两个问题：
+这篇只讲两件事：
 
-这个人是谁？
+这个人是谁。
 
-他能做什么？
+他能做什么。
 
-当前项目使用简化版认证：只签发 Access Token，不再使用 Refresh Token。
+当前项目已经简化成：
+
+只签发 Access Token，没有 Refresh Token。
+
+Token 默认有效期 24 小时，过期后重新登录。
 
 ---
 
-## 1. 用生活例子理解
+## 1. 先用生活例子理解
 
-登录：去前台办一张门禁卡。
+登录：去前台办门禁卡。
 
-Access Token：这张门禁卡，进楼时给保安看。
+Access Token：门禁卡，进楼时给保安看。
 
 RBAC：不同卡片能进不同区域。
 
-普通用户只能进商城。
+普通用户：只能进商城。
 
-管理员能进运营后台。
+管理员：能进运营后台。
 
-调试人员能进调试区。
+调试人员：能进调试区。
 
 保安只认卡，不认你口头说“我是管理员”。
 
-Token 过期后，需要重新登录换一张新卡。
+对应到代码：
+
+前端：拿卡、出示卡。
+
+后端：验卡、查人、看权限。
+
+数据库：保存用户和密码哈希。
 
 ---
 
-## 2. 这个项目里谁管什么
+## 2. 四个核心文件
 
-认证只有四个核心文件：
+后端：
 
 backend/app/api/v1/auth.py
 
-负责注册、登录、获取当前用户、退出接口。
+登录、注册、获取当前用户、退出接口。
 
 backend/app/services/auth.py
 
-负责校验邮箱密码，并签发 Access Token。
+校验邮箱密码，签发 Access Token。
 
 backend/app/core/token.py
 
-负责 JWT 的签发和校验。
+JWT 的签发和校验。
 
 backend/app/api/dependencies.py
 
-负责从请求头拿 Token、解析用户、检查管理员或调试权限。
+从请求头拿 Token，解析用户，检查角色。
 
-前端对应：
+前端：
 
 frontend/src/utils/token.ts
 
-保存和清除 Access Token。
+保存和清除 Token。
 
 frontend/src/api/client.ts
 
-请求自动带 Token，遇到 401 清除 Token 并跳登录页。
+请求自动带 Token，401 时清 Token 跳登录页。
 
-frontend/src/router 下的 ProtectedRoute、AdminRoute、DebugRoute
+frontend/src/router 下的三个守卫
 
 负责页面跳转，不是最终权限边界。
 
@@ -68,7 +78,7 @@ frontend/src/router 下的 ProtectedRoute、AdminRoute、DebugRoute
 
 ## 3. 登录时发生了什么
 
-入口：
+请求：
 
 POST /api/v1/auth/login
 
@@ -76,15 +86,15 @@ POST /api/v1/auth/login
 
 第一步：查用户
 
-邮箱去空格、转小写，然后按邮箱查用户。
+邮箱去空格、转小写，按邮箱查用户。
 
 第二步：校验密码
 
 用 Argon2id 校验密码。
 
-密码哈希是 CPU 密集型操作，所以放到线程池。
+密码哈希比较慢，所以放到线程池，避免阻塞 FastAPI。
 
-用户不存在时也执行一次假的密码校验，让响应时间和真实用户接近，防止别人通过响应快慢猜邮箱是否存在。
+用户不存在时也做一次假校验，让响应时间和真实用户接近，防止别人通过响应快慢猜邮箱是否存在。
 
 第三步：签发 Access Token
 
@@ -100,7 +110,7 @@ JWT 里主要放：
 
 Token 类型
 
-JWT 由服务端签名，客户端不能修改。
+JWT 由服务端签名，客户端不能改。
 
 第四步：返回 Token
 
@@ -112,13 +122,15 @@ token_type
 
 expires_in
 
-默认有效期是 24 小时。
+默认有效期 24 小时。
+
+没有 refresh_token。
 
 ---
 
-## 4. 后续请求怎么认人
+## 4. 请求进来怎么认人
 
-请求头带：
+请求头：
 
 Authorization: Bearer access_token
 
@@ -166,7 +178,7 @@ is_admin：是不是管理员。
 
 is_debugger：是不是调试人员。
 
-对应三个依赖：
+三个依赖：
 
 CurrentUser：登录且账号可用。
 
@@ -174,7 +186,7 @@ CurrentAdmin：必须是管理员。
 
 CurrentDebugger：管理员或调试人员。
 
-权限大概是这样：
+权限：
 
 普通用户：商城、下单、订单、售后、AI 客服。
 
@@ -198,17 +210,17 @@ CurrentDebugger：管理员或调试人员。
 
 普通用户访问管理员接口：403。
 
-这两个不要答反。
+不要答反。
 
 ---
 
-## 7. Token 过期和退出
+## 7. 过期和退出
 
 Token 过期：
 
-前端请求会收到 401。
+前端收到 401。
 
-Axios 清除本地 Token，跳登录页。
+Axios 删除本地 Token，跳登录页。
 
 用户重新登录。
 
@@ -216,39 +228,41 @@ Axios 清除本地 Token，跳登录页。
 
 前端直接删除 sessionStorage 里的 Token。
 
-后端 /auth/logout 返回 204，不保存服务端会话。
+后端 /auth/logout 返回 204，没有服务端会话要撤销。
 
-这是一种简化设计，适合面试 Demo。
+这是简化设计，适合面试 Demo。
 
-代价是：
+代价：
 
 Token 过期前无法在服务端主动撤销。
 
-Token 被偷后，在过期前仍然有效。
+Token 被偷后，在有效期内仍然可用。
 
-生产环境可以再引入 Refresh Token、黑名单或更短的 Token。
+生产环境可以再加黑名单、短期 Token 或 Refresh Token。
 
 ---
 
 ## 8. 前端怎么配合
 
-前端把 Access Token 存在 sessionStorage。
+Access Token 存在 sessionStorage。
 
-sessionStorage 是每个浏览器标签页独立的。
+sessionStorage 按浏览器标签页隔离。
 
-所以同一个浏览器可以开三个标签页，分别登录消费者、管理员和调试人员。
+所以同一个浏览器可以开三个标签页，分别登录消费者、管理员、调试人员。
 
-请求时 Axios 自动加 Authorization。
+请求时 Axios 自动加：
 
-如果接口返回 401：
+Authorization: Bearer access_token
+
+接口返回 401：
 
 清除 Token。
 
-触发 auth:expired 事件。
+触发 auth:expired。
 
 跳登录页。
 
-前端不再自动刷新 Token。
+不会自动刷新 Token。
 
 路由守卫：
 
@@ -272,7 +286,7 @@ sessionStorage 是每个浏览器标签页独立的。
 
 这个项目用的是简化版 JWT 认证，只签发 Access Token，没有 Refresh Token。
 
-登录时，AuthService 先查用户并用 Argon2id 校验密码，然后签发 JWT。JWT 里带用户 ID 和过期时间，默认有效期 24 小时。
+登录时，AuthService 先查用户并用 Argon2id 校验密码，然后签发 JWT。JWT 里带用户 ID 和过期时间，默认 24 小时。
 
 请求进来后，get_current_user 从 Bearer Token 解析用户 ID，再回查数据库确认账号仍然可用。CurrentAdmin 在 CurrentUser 之上检查 is_admin，CurrentDebugger 允许管理员或调试人员。
 
@@ -290,11 +304,11 @@ sessionStorage 是每个浏览器标签页独立的。
 
 答：Access Token 校验不依赖服务端 Session，适合前后端分离。
 
-问：为什么本项目不需要 Refresh Token？
+问：为什么本项目没有 Refresh Token？
 
 答：这是简化版面试项目，Token 有效期 24 小时，过期后重新登录，代码和讲解都更简单。
 
-问：为什么每次请求还要查数据库？
+问：为什么 JWT 有效还要查数据库？
 
 答：用户可能被禁用或删除，JWT 不知道最新状态。
 
@@ -350,11 +364,11 @@ sessionStorage 是每个浏览器标签页独立的。
 
 ## 12. 先读哪些代码
 
-按这个顺序看：
+按这个顺序：
 
 backend/app/api/v1/auth.py
 
-只看 login、me、logout 三个接口。
+只看 login、me、logout。
 
 backend/app/services/auth.py
 
