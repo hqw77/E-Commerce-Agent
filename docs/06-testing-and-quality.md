@@ -14,7 +14,7 @@ E2E            Playwright
 ## 2. 当前基线
 
 ```text
-Backend/Agent pytest：361 passed
+Backend/Agent pytest：336 passed
 Frontend typecheck：通过
 Frontend lint：通过
 Frontend production build：通过
@@ -58,10 +58,10 @@ Storage：storage/test_knowledge
 
 ### 认证
 
-- 注册、登录、Refresh；
-- 过期/无效 Token；
+- 注册、登录；
+- Access Token 签发、过期和无效 Token；
 - 普通用户访问管理员接口 403；
-- `is_admin` 返回。
+- `is_admin` / `is_debugger` 返回。
 
 ### 商品
 
@@ -99,6 +99,7 @@ Storage：storage/test_knowledge
 - 路由；
 - READ Tool；
 - PREPARE / Confirm；
+- 管理员库存调整审批；
 - nonce / 用户 / 会话 / 参数 hash；
 - 输出校验；
 - Trace。

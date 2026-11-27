@@ -107,8 +107,8 @@ UNSUPPORTED_ACTION
 确定性规则先拦截明显请求：
 
 ```text
-退款 / 支付 / 改库存 / 建订单 → UNSUPPORTED
-取消订单 / 售后 → WORKFLOW
+退款 / 支付 / 建订单 → UNSUPPORTED
+取消订单 / 售后 / 库存调整 → WORKFLOW
 查询订单 / 商品 / 库存 → TOOL
 ```
 
@@ -132,6 +132,7 @@ READ
 PREPARE
   prepare_cancel_order
   prepare_create_after_sales
+  prepare_adjust_inventory
 ```
 
 边界：
@@ -140,7 +141,8 @@ PREPARE
 - Pydantic 参数校验；
 - Tool 调用 Service，不直接 SQL；
 - READ 不执行业务写操作；
-- PREPARE 只写 Redis pending。
+- 用户 PREPARE 只写 Redis pending；
+- 管理员库存调整写 MySQL 审批记录和 Redis pending。
 
 ## 7. Prepare / Confirm
 
@@ -166,6 +168,29 @@ params_hash
 状态
 TTL
 ```
+
+## 7.1 管理员库存审批
+
+```text
+prepare_adjust_inventory
+→ AgentApprovalService.create_inventory_adjustment
+→ 写 MySQL agent_approvals
+→ 写 Redis pending
+→ start_approval 启动审批子图并 interrupt
+→ 管理员审批
+→ resume_approval
+→ 重新读取库存并对比 before_data
+→ InventoryService.adjust
+→ 状态 executed
+```
+
+关键点：
+
+- 只有管理员可以创建库存调整计划；
+- 批准后不能相信 Prepare 时的库存快照；
+- 库存已变化时标记 stale，不执行；
+- 审批状态以 MySQL 为权威源；
+- 审批子图使用进程内 checkpointer，重启后可重建中断。
 
 ## 8. Safety / Trace
 
@@ -220,6 +245,8 @@ HTML
 ```
 
 不支持 OCR。
+
+当前本地演示知识库有 7 篇文档：5 篇公开政策/说明、1 篇 ADMIN_ONLY 内部审批规则、1 篇历史测试文档。
 
 ### 检索安全
 

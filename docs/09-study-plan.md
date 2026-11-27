@@ -115,9 +115,13 @@ Product / Sku / Inventory 的关系
 stateDiagram-v2
     [*] --> CREATED
     CREATED --> CANCELLED
-    CREATED --> SHIPPED
-    SHIPPED --> DELIVERED
-    DELIVERED --> COMPLETED
+    CREATED --> COMPLETED
+```
+
+履约状态单独看：
+
+```text
+UNSHIPPED -> SHIPPED -> DELIVERED -> COMPLETED
 ```
 
 ---
@@ -189,6 +193,8 @@ agent/runtime.py
 agent/tools/registry.py
 agent/tools/executor.py
 agent/tools/confirmation.py
+agent/approval_workflow.py
+backend/app/services/agent_approval.py
 agent/tools/order.py
 agent/tools/product.py
 agent/safety/
@@ -217,6 +223,8 @@ GENERAL/RAG/TOOL/WORKFLOW/UNSUPPORTED 如何路由
 READ 和 PREPARE 的区别
 Prepare 为什么只写 Redis
 Confirm 如何防止重复消费
+管理员库存调整为什么走审批
+批准后为什么要重新校验库存
 Tool 如何避免越权
 ```
 
@@ -309,7 +317,7 @@ npm run build
 没有支付
 没有生产部署
 Trace 不持久化
-单浏览器只能一个身份
+同一个标签页只能一个身份，多标签页可分别登录
 ```
 
 ---

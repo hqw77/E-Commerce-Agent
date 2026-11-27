@@ -11,6 +11,7 @@ AI 导购
 我的订单
 管理员履约
 售后换货
+Agent 库存审批
 运营后台
 ```
 
@@ -131,7 +132,7 @@ http://127.0.0.1:5173/shop
 
 ### 第 5 步：管理员履约
 
-普通窗口登录管理员：
+切到标签页 A（管理员）。
 
 ```text
 http://127.0.0.1:5173/dashboard
@@ -209,6 +210,24 @@ RETURN_SHIPPED
 ```
 
 普通用户刷新售后详情，看到完成。
+
+### 第 10 步：Agent 库存审批
+
+管理员在 Agent 对话中提出库存调整，或者直接打开：
+
+```text
+/agent/approvals
+```
+
+讲解：
+
+- 这是 PREPARE 生成的高风险计划；
+- 计划写 `agent_approvals` 和 Redis pending；
+- 审批前不修改库存；
+- 批准后重新校验库存，再调用 InventoryService；
+- 审批通过后状态变为 executed。
+
+---
 
 ## 4. 备用演示
 

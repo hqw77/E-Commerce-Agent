@@ -120,11 +120,11 @@ API 不直接操作数据库
 
 打开：
 
-[order.py:142](backend/app/services/order.py#L142)
+[order.py:141](backend/app/services/order.py#L141)
 
 把函数拆成 5 块，不要一次读完。
 
-#### ① 幂等检查（160～168 行）
+#### ① 幂等检查
 
 ```python
 fingerprint = self._fingerprint(request)
@@ -150,7 +150,7 @@ if existing is not None:
 orders(user_id, idempotency_key) 唯一
 ```
 
-#### ② 校验商品和库存（170～172 行）
+#### ② 校验商品和库存
 
 ```python
 lines = await self._load_purchase_lines(request)
@@ -172,7 +172,7 @@ SKU 存在且 ACTIVE
 这里只是预检查，真正的并发安全在 InventoryRepository.reserve。
 ```
 
-#### ③ 核心事务（174～226 行）
+#### ③ 核心事务
 
 ```python
 async with transaction_context(self.session):
@@ -210,7 +210,7 @@ fulfillment_status = UNSHIPPED
 当前项目没有支付流程，订单创建只关注业务状态、履约状态、金额和收货信息。
 ```
 
-#### ④ 并发兜底（227～243 行）
+#### ④ 并发兜底
 
 ```python
 except IntegrityError as exc:
@@ -227,7 +227,7 @@ except IntegrityError as exc:
 -> 按幂等键重新读取旧订单
 ```
 
-#### ⑤ 返回详情（245 行）
+#### ⑤ 返回详情
 
 ```python
 return await self._detail(order.order_no)
@@ -295,7 +295,7 @@ update(Inventory)
 
 取消：
 
-[cancel_order:310](backend/app/services/order.py#L310)
+[cancel_order:312](backend/app/services/order.py#L312)
 
 ```text
 锁订单 + 校验归属
@@ -306,7 +306,7 @@ update(Inventory)
 
 发货：
 
-[ship:354](backend/app/services/order.py#L354)
+[ship:356](backend/app/services/order.py#L356)
 
 ```text
 锁订单

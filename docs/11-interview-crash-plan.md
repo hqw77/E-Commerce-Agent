@@ -2,7 +2,7 @@
 
 > 目标岗位：小公司初级全栈。
 > 目标：不继续重构项目，用 3 天把现有项目讲到“能演示、能解释、能被追问”。
-> 当前代码 checkpoint：`6375a72`。
+> 当前代码 checkpoint：`7fbb129`。
 
 ---
 
@@ -47,8 +47,8 @@ Backend app：103 个 Python 文件
 Agent：33 个 Python 文件
 Frontend：63 个 TS/TSX 文件
 接口：约 70 个路由
-业务表：14 张
-测试：364 个
+业务表：13 张
+测试：336 个
 ```
 
 ### 已完成
@@ -57,8 +57,8 @@ Frontend：63 个 TS/TSX 文件
 全量中文注释
 支付/退款遗留表和模型已删除
 Agent 完整保留
-数据库迁移到 80b9bbf33d5a
-364 个测试通过
+数据库迁移到 33d629302f1f
+336 个测试通过
 ```
 
 ### 明确边界
@@ -145,7 +145,8 @@ backend/app/api/dependencies.py
 
 ```text
 CREATED -> CANCELLED
-CREATED -> SHIPPED -> DELIVERED -> COMPLETED
+CREATED -> COMPLETED
+履约状态：UNSHIPPED -> SHIPPED -> DELIVERED -> COMPLETED
 ```
 
 **必须能说**
@@ -200,7 +201,7 @@ PREPARE 只生成待确认计划，执行走 Confirm 或管理员审批
 
 ### 30 秒
 
-> 这是一个电商 MVP 加 AI 客服项目。后端使用 FastAPI、MySQL、Redis，前端使用 React、TypeScript、Ant Design。用户端支持商品、下单、订单和售后；管理端支持发货、库存调整和审批。Agent 使用 LangGraph 做意图路由，只读工具查询商品和订单，高风险写操作走 PREPARE 加确认或管理员审批。我重点负责后端业务、权限和 Agent 接入，项目目前有 364 个测试。
+> 这是一个电商 MVP 加 AI 客服项目。后端使用 FastAPI、MySQL、Redis，前端使用 React、TypeScript、Ant Design。用户端支持商品、下单、订单和售后；管理端支持发货、库存调整和审批。Agent 使用 LangGraph 做意图路由，只读工具查询商品和订单，高风险写操作走 PREPARE 加确认或管理员审批。我重点负责后端业务、权限和 Agent 接入，项目目前有 336 个测试。
 
 ### 1 分钟
 
@@ -583,7 +584,7 @@ C 调试人员
 测试：
 
 ```text
-- 使用 Pytest 覆盖订单、库存、权限和 Agent 核心流程，项目共 364 个测试。
+- 使用 Pytest 覆盖订单、库存、权限和 Agent 核心流程，项目共 336 个测试。
 ```
 
 ---

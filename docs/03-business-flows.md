@@ -98,18 +98,23 @@ backend/app/services/order.py
 stateDiagram-v2
     [*] --> CREATED
     CREATED --> CANCELLED: 用户取消未发货
-    CREATED --> SHIPPED: 管理员发货
-    SHIPPED --> DELIVERED: 管理员标记送达
-    DELIVERED --> COMPLETED: 管理员完成
+    CREATED --> COMPLETED: 管理员完成履约
     CANCELLED --> [*]
     COMPLETED --> [*]
+```
+
+履约状态单独推进：
+
+```text
+UNSHIPPED -> SHIPPED -> DELIVERED -> COMPLETED
 ```
 
 注意：
 
 - `status` 表示订单主状态；
 - `fulfillment_status` 表示履约状态；
-- 发货后订单主状态可能仍是 `CREATED`，但履约状态为 `SHIPPED`；
+- 发货后订单主状态仍是 `CREATED`，履约状态变为 `SHIPPED`；
+- 管理员完成履约后订单主状态才变为 `COMPLETED`；
 - 只有履约 `DELIVERED` / `COMPLETED` 后，用户才能申请换货。
 
 ## 5. 管理员履约
@@ -217,6 +222,7 @@ Agent 可以做：
 查询自己的售后
 准备取消订单
 准备申请换货
+准备库存调整（管理员）
 ```
 
 Agent 不能：
@@ -226,6 +232,17 @@ Agent 不能：
 直接扣库存
 直接审核售后
 直接退款
+直接执行库存调整
 ```
 
-所有写操作必须 Prepare，再由用户通过 Confirm API 执行。
+用户写操作必须 Prepare，再由用户通过 Confirm API 执行。
+
+管理员库存调整走独立审批：
+
+```text
+PREPARE 生成审批计划
+→ 写 MySQL agent_approvals 和 Redis pending
+→ 管理员审批
+→ 重新校验库存
+→ InventoryService.adjust
+```

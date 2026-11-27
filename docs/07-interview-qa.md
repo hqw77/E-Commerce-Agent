@@ -2,11 +2,11 @@
 
 ## 1. 30 秒介绍
 
-这是一个双端电商智能体 MVP：消费者端可以浏览商品、立即购买、查看订单和申请换货；运营端负责商品、库存、订单和售后。AI 导购通过 LangGraph 调用真实商品和订单工具，取消订单和换货必须经过 Prepare/Confirm。
+这是一个双端电商智能体 MVP：消费者端可以浏览商品、立即购买、查看订单和申请换货；运营端负责商品、库存、订单和售后。认证使用 Access Token + RBAC，AI 导购通过 LangGraph 调用真实商品和订单工具，取消订单和换货必须经过 Prepare/Confirm，库存调整必须管理员审批。
 
 ## 2. 1 分钟介绍
 
-项目后端是 FastAPI + 异步 SQLAlchemy，前端是 React + TypeScript。业务侧有商品、SKU、库存、订单和只支持换货的售后。订单创建会预占库存，取消释放，发货扣减。AI 侧用 LangGraph 做五类路由；工具有 READ 和 PREPARE 两种，PREPARE 只写 Redis pending，用户通过独立 Confirm API 执行，nonce 和参数 hash 由 Lua 原子消费。RAG 使用 BGE-M3 + Qdrant，但 MySQL 是 Chunk、版本和权限权威源。
+项目后端是 FastAPI + 异步 SQLAlchemy，前端是 React + TypeScript。认证是简化版 Access Token，后端用 CurrentUser / CurrentAdmin / CurrentDebugger 做 RBAC。业务侧有商品、SKU、库存、订单和只支持换货的售后。订单创建会预占库存，取消释放，发货扣减。AI 侧用 LangGraph 做五类路由；工具有 READ 和 PREPARE 两种，用户 PREPARE 写 Redis pending，管理员库存调整写 MySQL 审批记录和 Redis pending；真正执行走 Confirm 或管理员审批，nonce 和参数 hash 由 Lua 原子消费。RAG 使用 BGE-M3 + Qdrant，但 MySQL 是 Chunk、版本和权限权威源。
 
 ## 3. 为什么做双端
 
@@ -98,7 +98,7 @@ Qdrant 只负责向量召回。Chunk 正文、版本、ACL 和发布状态都在
 没有生产部署
 Trace 不持久化
 RAG 评测样本小
-单浏览器只能保留一个登录身份
+同一个标签页只能保留一个登录身份，多标签页可以分别登录
 ```
 
 面试时应主动说明边界，不把“未实现”讲成“已完成”。

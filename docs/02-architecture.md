@@ -24,11 +24,14 @@ flowchart TB
     GRAPH --> RAG[RAG 检索]
     GRAPH --> TOOL[Tool Executor]
     GRAPH --> CONFIRM[Prepare / Confirm]
+    GRAPH --> APPROVAL[管理员审批]
 
     RAG --> QDRANT[(Qdrant)]
     RAG --> MYSQL
     TOOL --> SVC
     CONFIRM --> REDIS[(Redis)]
+    APPROVAL --> MYSQL
+    APPROVAL --> REDIS
 
     GRAPH --> TRACE[Trace Buffer]
 ```
@@ -110,27 +113,22 @@ inventory_transactions
 orders
 order_items
 after_sales
+agent_approvals
 knowledge_documents
 knowledge_document_versions
 knowledge_chunks
 ```
 
-历史兼容表：
-
-```text
-payments
-refunds
-```
-
-运行时不再写入支付/退款。
+`payments`、`refunds`、`refresh_sessions` 已删除，不再是当前数据库的一部分。
 
 ### Redis
 
-- Refresh Session / 会话相关；
 - Agent 会话历史；
 - 会话锁；
 - Rate Limit；
-- Prepare/Confirm pending。
+- Prepare/Confirm pending；
+- 管理员审批 pending；
+- 审批子图中断状态依赖进程内 checkpointer。
 
 ### Qdrant
 
@@ -157,7 +155,9 @@ AgentRuntime
 - 数据库 Session、User、LLM 不进入 State；
 - `AgentRuntimeContext` 保存可信依赖；
 - Tool 只能通过 Registry/Executor；
-- 写操作必须 Confirm。
+- 用户写操作必须 Confirm；
+- 管理员高风险库存调整必须走审批；
+- 审批通过后重新校验库存再执行。
 
 ## 6. 架构决策
 
@@ -167,7 +167,7 @@ Qdrant 适合召回，但不适合保存业务权限和完整正文。检索必�
 
 ### 为什么 PREPARE 不直接执行
 
-LLM 不应决定订单取消或售后申请是否立即生效。PREPARE 只生成 Redis pending，用户确认后再由 Service 重新校验状态。
+LLM 不应决定订单取消或售后申请是否立即生效。PREPARE 只生成 Redis pending，用户确认后再由 Service 重新校验状态。管理员库存调整则写入 `agent_approvals` 和 Redis pending，由管理员审批后恢复执行。
 
 ### 为什么保留运营后台
 

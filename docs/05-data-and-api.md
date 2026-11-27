@@ -32,9 +32,8 @@ Sku 1 ── 1 Inventory
 Sku 1 ── N InventoryTransaction
 Category 1 ── N Product
 Order 1 ── N AfterSale
-AfterSale 1 ── 1 Refund（历史）
-Payment 1 ── N Refund（历史）
 KnowledgeDocument 1 ── N Version 1 ── N Chunk
+User 1 ── N AgentApproval
 ```
 
 ## 3. Product 关键字段
@@ -237,11 +236,14 @@ pending → approved → executed
 ### 知识库
 
 ```text
-/api/v1/knowledge/documents
-/api/v1/knowledge/versions
-/api/v1/knowledge/publish
-/api/v1/knowledge/retry
-/api/v1/knowledge/retrieve
+POST /api/v1/knowledge/documents
+GET  /api/v1/knowledge/documents
+GET  /api/v1/knowledge/documents/{document_id}
+POST /api/v1/knowledge/documents/{document_id}/versions
+POST /api/v1/knowledge/documents/{document_id}/versions/{version_id}/publish
+POST /api/v1/knowledge/documents/{document_id}/versions/{version_id}/retry
+DELETE /api/v1/knowledge/documents/{document_id}
+POST /api/v1/knowledge/retrieve
 ```
 
 ## 8. 认证约定
@@ -266,7 +268,15 @@ Alembic 迁移位于：
 backend/alembic/versions/
 ```
 
-当前包含商品 `image_url` 迁移和知识库表迁移。
+当前 head：
+
+```text
+33d629302f1f  删除 refresh_sessions, 完成 Access Token-only 认证
+5d7a27f8ba5c  删除订单支付遗留字段
+80b9bbf33d5a  删除 payments / refunds 表
+```
+
+当前数据库共 13 张业务表，不再有 `payments`、`refunds`、`refresh_sessions`。
 
 常用命令：
 

@@ -461,7 +461,7 @@ Token 类型
 
 JWT 被改过，验签会失败。
 
-Refresh Token 不能当 Access Token 用。
+其他类型 Token 不能当 Access Token 用。
 
 ## 第 4 步：请求鉴权
 
