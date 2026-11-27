@@ -21,6 +21,7 @@
 13 订单库存四条主链路面试总结
 14 JWT 与 RBAC 代码阅读与面试总结
 15 Agent 工具与审批完整教程
+16 RAG 完整教程与效果评估
 ```
 
 ## 文档索引
@@ -40,6 +41,7 @@
 - [13 订单库存四条主链路面试总结](13-order-inventory-four-flows.md)
 - [14 JWT 与 RBAC 代码阅读与面试总结](14-jwt-rbac-reading-guide.md)
 - [15 Agent 工具与审批完整教程](15-agent-tool-approval-guide.md)
+- [16 RAG 完整教程与效果评估](16-rag-complete-guide.md)
 
 ## 项目一句话
 
