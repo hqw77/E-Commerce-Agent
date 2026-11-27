@@ -10,13 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 # Legacy status values remain accepted for historical rows. New orders only use
 # CREATED, CANCELLED and COMPLETED.
 OrderStatus = Literal[
-    "CREATED",
-    "PENDING_PAYMENT",
-    "PAID",
-    "CANCELLED",
-    "CLOSED",
-    "COMPLETED",
+    "CREATED",          # 已创建
+    "PENDING_PAYMENT",  # 待支付
+    "PAID",             # 已支付
+    "CANCELLED",        # 已取消
+    "CLOSED",           # 已关闭
+    "COMPLETED",        # 已完成
 ]
+# 未发货、已发货、已送达、已完成
 FulfillmentStatus = Literal["UNSHIPPED", "SHIPPED", "DELIVERED", "COMPLETED"]
 
 
