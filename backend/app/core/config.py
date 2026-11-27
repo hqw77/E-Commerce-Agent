@@ -127,8 +127,7 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256"] = "HS256"
     jwt_issuer: str = Field(default="ecommerce-agent", min_length=1)
     jwt_audience: str = Field(default="ecommerce-agent-api", min_length=1)
-    jwt_access_token_expire_minutes: int = Field(default=15, ge=1, le=1440)
-    jwt_refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
+    jwt_access_token_expire_minutes: int = Field(default=1440, ge=1, le=10080)
     jwt_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
     # 交易业务时间窗口. 售后窗口继续使用.

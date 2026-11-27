@@ -1,28 +1,20 @@
 # 14 JWT 与 RBAC 代码阅读与面试总结
 
-这篇文档只回答一个问题：
+这篇文档只回答两个问题：
 
-这个人是谁，他能做什么。
+这个人是谁？
 
-先不要背技术名词，先记住三句话：
+他能做什么？
 
-登录：证明你是谁。
-
-JWT：后续请求怎么证明你还是你。
-
-RBAC：证明身份后，判断你能不能做这件事。
+当前项目使用简化版认证：只签发 Access Token，不再使用 Refresh Token。
 
 ---
 
 ## 1. 用生活例子理解
 
-把系统想成一栋楼。
+登录：去前台办一张门禁卡。
 
-登录：你去前台办门禁卡。
-
-Access Token：一张短期门禁卡，进楼时给保安看。
-
-Refresh Token：一张长期续卡凭证，门禁卡过期后用它换新卡。
+Access Token：这张门禁卡，进楼时给保安看。
 
 RBAC：不同卡片能进不同区域。
 
@@ -34,57 +26,47 @@ RBAC：不同卡片能进不同区域。
 
 保安只认卡，不认你口头说“我是管理员”。
 
-对应到代码：
-
-前端：拿卡、出示卡。
-
-后端：验卡、查人、看权限。
-
-数据库：保存用户和 Refresh Token 记录。
+Token 过期后，需要重新登录换一张新卡。
 
 ---
 
 ## 2. 这个项目里谁管什么
 
-后端认证只有四个核心文件：
+认证只有四个核心文件：
 
 backend/app/api/v1/auth.py
 
-负责注册、登录、刷新、退出、获取当前用户这些 HTTP 接口。
+负责注册、登录、获取当前用户、退出接口。
 
 backend/app/services/auth.py
 
-负责真正的登录逻辑、密码校验、Refresh Token 轮换和退出。
+负责校验邮箱密码，并签发 Access Token。
 
 backend/app/core/token.py
 
-负责签发和校验 Access Token。
+负责 JWT 的签发和校验。
 
 backend/app/api/dependencies.py
 
-负责从请求头拿 Token，解析用户，并检查管理员或调试权限。
+负责从请求头拿 Token、解析用户、检查管理员或调试权限。
 
 前端对应：
 
 frontend/src/utils/token.ts
 
-保存和清除 Token。
+保存和清除 Access Token。
 
 frontend/src/api/client.ts
 
-请求自动带 Token，401 时自动刷新。
+请求自动带 Token，遇到 401 清除 Token 并跳登录页。
 
-frontend/src/router/ProtectedRoute.tsx
-
-AdminRoute.tsx
-
-DebugRoute.tsx
+frontend/src/router 下的 ProtectedRoute、AdminRoute、DebugRoute
 
 负责页面跳转，不是最终权限边界。
 
 ---
 
-## 3. 登录时到底发生了什么
+## 3. 登录时发生了什么
 
 入口：
 
@@ -94,23 +76,17 @@ POST /api/v1/auth/login
 
 第一步：查用户
 
-先把邮箱去空格、转小写，再按邮箱查用户。
+邮箱去空格、转小写，然后按邮箱查用户。
 
 第二步：校验密码
 
 用 Argon2id 校验密码。
 
-密码哈希是 CPU 密集型操作，所以放到线程池，避免阻塞 FastAPI。
+密码哈希是 CPU 密集型操作，所以放到线程池。
 
-如果用户不存在，也会做一次假的密码校验，让响应时间和真实用户接近，防止别人通过响应快慢猜邮箱是否存在。
+用户不存在时也执行一次假的密码校验，让响应时间和真实用户接近，防止别人通过响应快慢猜邮箱是否存在。
 
-第三步：创建 Refresh Token
-
-Refresh Token 是一个随机字符串，不是 JWT。
-
-数据库只保存它的哈希，不保存明文。
-
-第四步：签发 Access Token
+第三步：签发 Access Token
 
 Access Token 是 JWT。
 
@@ -124,23 +100,19 @@ JWT 里主要放：
 
 Token 类型
 
-JWT 由服务端签名，客户端不能改。
+JWT 由服务端签名，客户端不能修改。
 
-第五步：返回两个 Token
+第四步：返回 Token
 
-登录响应返回：
+登录只返回：
 
 access_token
-
-refresh_token
 
 token_type
 
 expires_in
 
-Access Token 用来访问接口。
-
-Refresh Token 用来换新的 Access Token。
+默认有效期是 24 小时。
 
 ---
 
@@ -230,39 +202,37 @@ CurrentDebugger：管理员或调试人员。
 
 ---
 
-## 7. Access Token 和 Refresh Token 的区别
+## 7. Token 过期和退出
 
-Access Token：
+Token 过期：
 
-JWT。
+前端请求会收到 401。
 
-短期有效。
+Axios 清除本地 Token，跳登录页。
 
-每次请求都带。
+用户重新登录。
 
-服务端验签后就能知道用户 ID。
+退出：
 
-Refresh Token：
+前端直接删除 sessionStorage 里的 Token。
 
-随机字符串。
+后端 /auth/logout 返回 204，不保存服务端会话。
 
-长期有效。
+这是一种简化设计，适合面试 Demo。
 
-只用来换新的 Access Token。
+代价是：
 
-数据库保存哈希，可以撤销。
+Token 过期前无法在服务端主动撤销。
 
-每次刷新会换一个新的 Refresh Token，旧的失效。
+Token 被偷后，在过期前仍然有效。
 
-如果旧 Token 被重复使用，系统会认为可能被盗，撤销整个会话。
-
-这部分面试知道“会轮换、可撤销、重复使用会失效”就够了，不需要背每个分支。
+生产环境可以再引入 Refresh Token、黑名单或更短的 Token。
 
 ---
 
 ## 8. 前端怎么配合
 
-前端把 Token 存在 sessionStorage。
+前端把 Access Token 存在 sessionStorage。
 
 sessionStorage 是每个浏览器标签页独立的。
 
@@ -272,13 +242,13 @@ sessionStorage 是每个浏览器标签页独立的。
 
 如果接口返回 401：
 
-先调用 refresh 接口换新 Token。
+清除 Token。
 
-换成功后重放原请求。
+触发 auth:expired 事件。
 
-换失败就清 Token，跳登录页。
+跳登录页。
 
-多个请求同时 401 时，只发起一次刷新，避免重复刷新。
+前端不再自动刷新 Token。
 
 路由守卫：
 
@@ -300,11 +270,13 @@ sessionStorage 是每个浏览器标签页独立的。
 
 可以按这段说：
 
-登录时，AuthService 先查用户并用 Argon2id 校验密码，然后创建 Refresh Token，数据库只存哈希，同时签发 Access Token。Access Token 是 JWT，里面带用户 ID 和过期时间。
+这个项目用的是简化版 JWT 认证，只签发 Access Token，没有 Refresh Token。
+
+登录时，AuthService 先查用户并用 Argon2id 校验密码，然后签发 JWT。JWT 里带用户 ID 和过期时间，默认有效期 24 小时。
 
 请求进来后，get_current_user 从 Bearer Token 解析用户 ID，再回查数据库确认账号仍然可用。CurrentAdmin 在 CurrentUser 之上检查 is_admin，CurrentDebugger 允许管理员或调试人员。
 
-401 是身份没确认，403 是身份确认了但权限不够。前端用 sessionStorage 存 Token，Axios 自动加 Authorization，遇到 401 会刷新一次并重放请求。前端路由守卫只负责页面跳转，真正权限在后端。
+401 是身份没确认，403 是身份确认了但权限不够。前端用 sessionStorage 存 Token，Axios 自动加 Authorization，遇到 401 就清除 Token 并跳登录页。前端路由守卫只负责页面跳转，真正权限在后端。
 
 ---
 
@@ -318,13 +290,9 @@ sessionStorage 是每个浏览器标签页独立的。
 
 答：Access Token 校验不依赖服务端 Session，适合前后端分离。
 
-问：为什么 Access Token 要短？
+问：为什么本项目不需要 Refresh Token？
 
-答：泄露后的风险窗口小。
-
-问：为什么 Refresh Token 要长？
-
-答：用来换新的 Access Token，不用频繁重新登录。
+答：这是简化版面试项目，Token 有效期 24 小时，过期后重新登录，代码和讲解都更简单。
 
 问：为什么每次请求还要查数据库？
 
@@ -346,9 +314,13 @@ sessionStorage 是每个浏览器标签页独立的。
 
 答：抗暴力破解，带随机盐，不保存明文。
 
-问：Refresh Token 为什么不用 JWT？
+问：退出登录怎么实现？
 
-答：Refresh Token 需要撤销和轮换，数据库里的随机字符串更方便控制。
+答：前端删除 Token；服务端没有会话需要撤销。
+
+问：这个方案有什么缺点？
+
+答：Token 过期前无法主动撤销，生产环境需要更完整的会话撤销机制。
 
 ---
 
@@ -370,9 +342,9 @@ sessionStorage 是每个浏览器标签页独立的。
 
 正确：未认证 401，已认证没权限 403。
 
-错误五：说 Refresh Token 也存明文。
+错误五：说这个项目有 Refresh Token。
 
-正确：数据库只存哈希。
+正确：当前已经改成只使用 Access Token。
 
 ---
 
@@ -382,11 +354,11 @@ sessionStorage 是每个浏览器标签页独立的。
 
 backend/app/api/v1/auth.py
 
-只看 login、refresh、me、logout 四个接口。
+只看 login、me、logout 三个接口。
 
 backend/app/services/auth.py
 
-只看 login，知道密码校验和创建 Refresh Token。
+只看 login，知道密码校验和签发 Access Token。
 
 backend/app/core/token.py
 
@@ -404,23 +376,21 @@ frontend/src/api/client.ts
 
 frontend/src/router 下的三个守卫。
 
-不要第一遍就看 Refresh Token 的每个异常分支。
-
 ---
 
 ## 13. 五分钟自检
 
-1. 登录返回哪两个 Token？
+1. 登录返回哪个 Token？
 2. Access Token 里主要有什么？
 3. 为什么每次请求还要查数据库？
 4. CurrentUser、CurrentAdmin、CurrentDebugger 的区别？
 5. 401 和 403 的区别？
 6. 前端 401 后做了什么？
 7. 前端路由守卫能代替后端权限吗？
-8. 密码为什么要用 Argon2id？
+8. 退出登录怎么实现？
 
 ---
 
 ## 14. 最后背这一句
 
-登录证明身份，JWT 携带身份，CurrentUser 回查账号，CurrentAdmin 和 CurrentDebugger 做角色校验；Access Token 无状态，Refresh Token 可撤销可轮换；前端只负责携带和刷新，真正的权限边界在后端。
+登录签发 Access Token，JWT 携带身份，CurrentUser 回查账号，CurrentAdmin 和 CurrentDebugger 做角色校验；Token 过期后前端清除并重新登录，前端只负责携带 Token，真正的权限边界在后端。

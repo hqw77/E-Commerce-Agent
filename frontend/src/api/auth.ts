@@ -20,7 +20,3 @@ export async function me(): Promise<User> {
   const response = await api.get<User>('/auth/me');
   return response.data;
 }
-
-export async function logout(refreshToken: string): Promise<void> {
-  await api.post('/auth/logout', { refresh_token: refreshToken });
-}

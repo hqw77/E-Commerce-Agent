@@ -106,7 +106,7 @@ Swagger    http://127.0.0.1:8000/docs
 数据库     MySQL 8, Redis 7, Qdrant
 Agent      LangGraph, LangChain Core, langchain-openai, DeepSeek
 RAG        BAAI/bge-m3, sentence-transformers, Qdrant
-认证       Argon2id, PyJWT, Access/Refresh Token
+认证       Argon2id, PyJWT, Access Token
 前端       React 18, TypeScript, Vite, Ant Design, TanStack Query
 测试       Pytest, Vitest, Playwright
 工程       Alembic, Ruff, Mypy, Docker Compose

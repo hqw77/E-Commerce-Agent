@@ -8,7 +8,7 @@
 POST /api/v1/auth/login
 → AuthService
 → 校验密码
-→ 创建 Access/Refresh Token
+→ 签发 Access Token
 → 前端保存 Token
 → GET /auth/me
 → 按 is_admin 跳转

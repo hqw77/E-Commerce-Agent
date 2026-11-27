@@ -13,5 +13,5 @@ def test_single_alembic_head_and_expected_parent() -> None:
     assert len(heads) == 1
     revision = script.get_revision(heads[0])
     assert revision is not None
-    # 当前 head 是清理订单支付字段, 其父版本是删除支付/退款表的迁移.
-    assert revision.down_revision == "80b9bbf33d5a"
+    # 当前 head 是删除 Refresh Session, 其父版本是删除订单支付字段.
+    assert revision.down_revision == "5d7a27f8ba5c"

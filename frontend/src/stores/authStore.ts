@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import * as authApi from '../api/auth';
 import type { LoginRequest, RegisterRequest, User } from '../types/auth';
-import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from '../utils/token';
+import { clearTokens, getAccessToken, saveAccessToken } from '../utils/token';
 
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'anonymous';
 
@@ -59,7 +59,7 @@ export async function login(payload: LoginRequest): Promise<User> {
   emit({ ...snapshot, status: 'loading', error: null });
   try {
     const tokens = await authApi.login(payload);
-    saveTokens(tokens.access_token, tokens.refresh_token);
+    saveAccessToken(tokens.access_token);
     const user = await authApi.me();
     emit({ status: 'authenticated', user, error: null });
     return user;
@@ -79,15 +79,8 @@ export async function register(payload: RegisterRequest): Promise<User> {
 }
 
 export async function logout(): Promise<void> {
-  const refreshToken = getRefreshToken();
-  try {
-    if (refreshToken) await authApi.logout(refreshToken);
-  } catch {
-    // Local logout must still succeed when the server token is already invalid.
-  } finally {
-    clearTokens();
-    emit({ status: 'anonymous', user: null, error: null });
-  }
+  clearTokens();
+  emit({ status: 'anonymous', user: null, error: null });
 }
 
 window.addEventListener('auth:expired', () => {

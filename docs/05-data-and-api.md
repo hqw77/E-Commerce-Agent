@@ -2,11 +2,10 @@
 
 ## 1. 数据表
 
-当前共 15 张表：
+当前共 13 张业务表：
 
 ```text
 users
-refresh_sessions
 categories
 products
 skus
@@ -14,8 +13,6 @@ inventory
 inventory_transactions
 orders
 order_items
-payments（历史兼容）
-refunds（历史兼容）
 after_sales
 agent_approvals
 knowledge_documents
@@ -23,7 +20,7 @@ knowledge_document_versions
 knowledge_chunks
 ```
 
-运行时不再写 `payments` / `refunds`。
+支付/退款表已删除。
 
 ## 2. 核心关系
 
@@ -176,7 +173,6 @@ GET /api/v1/catalog/categories
 ```text
 POST /api/v1/auth/register
 POST /api/v1/auth/login
-POST /api/v1/auth/refresh
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 ```
@@ -254,7 +250,7 @@ pending → approved → executed
 Authorization: Bearer <access_token>
 ```
 
-Access Token 短期有效；Refresh Token 轮换并保存 session hash。
+Access Token 默认有效期 24 小时；过期后重新登录，不再使用 Refresh Token。
 
 普通用户访问管理 API：
 

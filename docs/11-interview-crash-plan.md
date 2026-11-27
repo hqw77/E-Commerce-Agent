@@ -231,7 +231,7 @@ PREPARE 只生成待确认计划，执行走 Confirm 或管理员审批
 流程：
 
 ```text
-登录 -> 校验密码 -> 签发 Access/Refresh Token
+登录 -> 校验密码 -> 签发 Access Token
 请求 -> Bearer Token -> 解析 claims -> 回查用户
 CurrentUser / CurrentAdmin / CurrentDebugger
 ```

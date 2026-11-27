@@ -48,7 +48,7 @@ def test_jwt_default_settings():
     assert config.jwt_algorithm == "HS256"
     assert config.jwt_issuer == "ecommerce-agent"
     assert config.jwt_audience == "ecommerce-agent-api"
-    assert config.jwt_access_token_expire_minutes == 15
+    assert config.jwt_access_token_expire_minutes == 1440
     assert config.jwt_leeway_seconds == 30
 
 
@@ -88,7 +88,7 @@ def test_jwt_identifiers_reject_empty_values(field, value):
         )
 
 
-@pytest.mark.parametrize("expire_minutes", [0, 1441])
+@pytest.mark.parametrize("expire_minutes", [0, 10081])
 def test_jwt_access_token_expire_minutes_rejects_out_of_range(
     expire_minutes,
 ):
@@ -100,7 +100,7 @@ def test_jwt_access_token_expire_minutes_rejects_out_of_range(
 
 
 def test_jwt_access_token_expire_minutes_accepts_boundary_values():
-    for expire_minutes in (1, 1440):
+    for expire_minutes in (1, 10080):
         config = Settings(
             _env_file=None,
             jwt_access_token_expire_minutes=expire_minutes,

@@ -60,7 +60,7 @@ AdminLayout   运营后台
 认证状态：
 
 - 单一登录页；
-- Access/Refresh Token；
+- Access Token；
 - 当前 Token 存在 `sessionStorage`，每个标签页独立；
 - 同一浏览器的不同标签页可以分别登录消费者、管理员和调试人员；
 - 关闭标签页后该标签页需要重新登录。
@@ -102,7 +102,6 @@ API Router
 
 ```text
 users
-refresh_sessions
 categories
 products
 skus

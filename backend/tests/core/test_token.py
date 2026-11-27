@@ -18,6 +18,7 @@ TEST_SECRET = "test-secret-key-for-jwt-at-least-32-bytes"
 def token_service() -> TokenService:
     """Create a TokenService with an isolated test configuration."""
     config = Settings(
+        _env_file=None,
         app_env="testing",
         jwt_secret_key=SecretStr(TEST_SECRET),
     )
@@ -69,7 +70,7 @@ def test_create_access_token_contains_valid_claims(
     assert claims.user_id == 1001
     assert isinstance(claims.jti, str)
     assert claims.jti
-    assert claims.expires_at - claims.issued_at == 900
+    assert claims.expires_at - claims.issued_at == 86400
 
 
 def test_create_access_token_generates_unique_jti(

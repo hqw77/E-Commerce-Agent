@@ -45,7 +45,6 @@ from app.models.knowledge_document_version import KnowledgeDocumentVersion
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.product import Product
-from app.models.refresh_session import RefreshSession
 from app.models.sku import Sku
 from app.models.user import User, normalize_email
 from sqlalchemy import delete, select
@@ -316,7 +315,6 @@ async def cleanup() -> None:
                 delete(KnowledgeDocumentVersion).where(KnowledgeDocumentVersion.document_id == document_id)
             )
             await session.execute(delete(KnowledgeDocument).where(KnowledgeDocument.id == document_id))
-        await session.execute(delete(RefreshSession).where(RefreshSession.user_id.in_([admin["id"], user["id"]])))
         await session.execute(delete(User).where(User.id.in_([admin["id"], user["id"]])))
         await session.commit()
 
