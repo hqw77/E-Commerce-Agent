@@ -18,7 +18,7 @@ def test_legacy_payment_tables_are_removed() -> None:
 
 
 def test_order_table_column_counts() -> None:
-    assert len(Order.__table__.columns) == 29
+    assert len(Order.__table__.columns) == 24
     assert len(OrderItem.__table__.columns) == 13
     assert len(AfterSale.__table__.columns) == 29
 
@@ -28,8 +28,6 @@ def test_order_constraint_and_index_names() -> None:
         "orders": {
             "checks": {
                 "ck_orders_total_amount",
-                "ck_orders_paid_amount",
-                "ck_orders_refunded_amount",
                 "ck_orders_fulfillment_status",
                 "ck_orders_shipping_pair",
             },
@@ -39,7 +37,6 @@ def test_order_constraint_and_index_names() -> None:
             },
             "indexes": {
                 "ix_orders_user_created",
-                "ix_orders_status_expires",
                 "ix_orders_created_at",
                 "ix_orders_tracking_no",
             },
@@ -127,7 +124,6 @@ def test_order_relationships() -> None:
 
 def test_order_model_nullability() -> None:
     assert Order.request_fingerprint.nullable is False
-    assert Order.expires_at.nullable is False
     assert Order.shipping_carrier.nullable is True
     assert Order.tracking_no.nullable is True
 

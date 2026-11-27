@@ -118,11 +118,9 @@ status = CREATED
 
 fulfillment_status = UNSHIPPED
 
-payment_status = UNPAID
+订单不再写 payment_status、paid_amount、refunded_amount、paid_at 等支付遗留字段。
 
-paid_amount 和 refunded_amount 是历史兼容字段。
-
-当前项目没有支付流程，不要把这两个字段讲成支付功能。
+当前项目没有支付流程，订单创建只关注业务状态、履约状态、金额和收货信息。
 
 然后逐行创建 OrderItem，保存商品和 SKU 快照：
 

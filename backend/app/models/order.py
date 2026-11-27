@@ -48,18 +48,9 @@ class Order(Base):
             name="uq_orders_user_idempotency",
         ),
         Index("ix_orders_user_created", "user_id", "created_at"),
-        Index("ix_orders_status_expires", "status", "expires_at"),
         Index("ix_orders_created_at", "created_at"),
         Index("ix_orders_tracking_no", "tracking_no"),
         CheckConstraint("total_amount > 0", name="ck_orders_total_amount"),
-        CheckConstraint(
-            "paid_amount >= 0 AND paid_amount <= total_amount",
-            name="ck_orders_paid_amount",
-        ),
-        CheckConstraint(
-            "refunded_amount >= 0 AND refunded_amount <= paid_amount",
-            name="ck_orders_refunded_amount",
-        ),
         CheckConstraint(
             "fulfillment_status IN ('UNSHIPPED', 'SHIPPED', 'DELIVERED', 'COMPLETED')",
             name="ck_orders_fulfillment_status",
@@ -102,13 +93,6 @@ class Order(Base):
         server_default="PENDING_PAYMENT",
     )
 
-    # 支付状态独立于主状态, 用于表达部分退款和迟到支付等情况.
-    payment_status: Mapped[str] = mapped_column(
-        String(24),
-        nullable=False,
-        server_default="UNPAID",
-    )
-
     # 履约状态: UNSHIPPED/SHIPPED/DELIVERED/COMPLETED.
     fulfillment_status: Mapped[str] = mapped_column(
         String(24),
@@ -120,18 +104,6 @@ class Order(Base):
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
-    )
-
-    paid_amount: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        server_default=text("0.00"),
-    )
-
-    refunded_amount: Mapped[Decimal] = mapped_column(
-        Numeric(12, 2),
-        nullable=False,
-        server_default=text("0.00"),
     )
 
     currency: Mapped[str] = mapped_column(
@@ -170,17 +142,6 @@ class Order(Base):
     request_fingerprint: Mapped[str] = mapped_column(
         mysql.CHAR(64, charset="ascii", collation="ascii_bin"),
         nullable=False,
-    )
-
-    # 待支付截止时间; 超时任务据此关闭订单并释放库存.
-    expires_at: Mapped[datetime] = mapped_column(
-        mysql.DATETIME(fsp=6),
-        nullable=False,
-    )
-
-    paid_at: Mapped[datetime | None] = mapped_column(
-        mysql.DATETIME(fsp=6),
-        nullable=True,
     )
 
     # 以下时间字段分别记录履约各阶段, 避免用单一 updated_at 推断业务进度.

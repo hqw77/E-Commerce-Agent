@@ -200,15 +200,14 @@ async with transaction_context(self.session):
 
 ```text
 status = CREATED
-payment_status = UNPAID
 fulfillment_status = UNSHIPPED
 ```
 
 注意：
 
 ```text
-payment_status / paid_amount / refunded_amount 是历史兼容字段。
-当前项目没有支付流程，不要把它们讲成支付功能。
+订单不再写 payment_status、paid_amount、refunded_amount、paid_at 等支付遗留字段。
+当前项目没有支付流程，订单创建只关注业务状态、履约状态、金额和收货信息。
 ```
 
 #### ④ 并发兜底（227～243 行）

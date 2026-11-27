@@ -98,13 +98,11 @@ id
 order_no
 user_id
 status
-payment_status
 fulfillment_status
 total_amount
 receiver_*
 idempotency_key
 request_fingerprint
-expires_at
 shipped_at
 delivered_at
 completed_at
@@ -112,6 +110,8 @@ cancelled_at
 shipping_carrier
 tracking_no
 ```
+
+订单表不再包含支付状态、支付金额、退款金额、支付时间和支付超时字段。
 
 订单主状态：
 

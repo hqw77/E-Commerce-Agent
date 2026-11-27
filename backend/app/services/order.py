@@ -16,7 +16,6 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.exceptions import ConflictException, ResourceNotFoundException
 from app.models.order import Order
 from app.models.product import Product
@@ -29,7 +28,7 @@ from app.repositories.sku import SkuRepository
 from app.schemas.order import OrderCreateRequest, ShipOrderRequest
 from app.services.inventory import InventoryService
 from app.services.transaction import transaction_context
-from app.utils.order import money, new_order_no, request_fingerprint, utc_after, utc_now
+from app.utils.order import money, new_order_no, request_fingerprint, utc_now
 
 # 历史 PAID 订单仍需支持发货; 新订单不会再进入 PAID 状态.
 LEGACY_SHIPPABLE_STATUSES = {"CREATED", "PAID"}
@@ -172,18 +171,16 @@ class OrderService:
         total_amount = money(sum((line[3] for line in lines), Decimal("0.00")))
 
         try:
-            # ③ 订单, 订单项和库存预占必须处于同一事务.
+            # ③ 开启数据库事务：所有数据库操作（建单、建明细、扣库存）要么全部成功，要么全部失败，保证数据一致性。
             async with transaction_context(self.session):
+                # 1. 创建订单主表 (Order)
                 order = Order(
                     order_no=new_order_no(),
                     user_id=user_id,
                     # Payment is out of scope; an order starts as CREATED.
                     status="CREATED",
-                    payment_status="UNPAID",
                     fulfillment_status="UNSHIPPED",
                     total_amount=total_amount,
-                    paid_amount=Decimal("0.00"),
-                    refunded_amount=Decimal("0.00"),
                     currency="CNY",
                     receiver_name=request.receiver_name,
                     receiver_phone=request.receiver_phone,
@@ -191,40 +188,45 @@ class OrderService:
                     customer_remark=request.customer_remark,
                     idempotency_key=request.idempotency_key,
                     request_fingerprint=fingerprint,
-                    # Legacy non-null column; no auto-close job uses it now.
-                    expires_at=utc_after(
-                        minutes=settings.order_payment_timeout_minutes
-                    ),
                 )
                 await self.orders.create(order)
-
+                # 2. 创建订单明细 (OrderItem)
                 created_items = []
                 for product, sku, quantity, line_amount in lines:
                     item = await self.items.create(
                         order_id=order.id,
                         product_id=product.id,
                         sku_id=sku.id,
+                        # 【关键设计】保存商品和 SKU 的快照信息（名称、属性、价格）
+                        # 防止未来商品下架或改价，历史订单数据失真
                         product_no=product.product_no,
                         product_name=product.name,
                         sku_code=sku.sku_code,
                         sku_attributes=sku.attributes,
                         currency="CNY",
-                        unit_price=money(sku.price),
+                        unit_price=money(sku.price), # 购买时的单价
                         quantity=quantity,
                         line_amount=line_amount,
                     )
                     created_items.append(item)
 
+                # 3. 预占库存（核心防超卖逻辑）
+                # 【亮点 1】sorted 按 sku_id 排序
+                # 目的：多个并发订单如果同时扣多个 SKU，排序能保证加锁顺序一致，避免死锁。
                 for item in sorted(created_items, key=lambda value: value.sku_id):
                     await self.inventory.reserve(
                         sku_id=item.sku_id,
                         quantity=item.quantity,
+                        # 【亮点 2】生成库存操作的幂等键
                         idempotency_key=f"order:{order.id}:line:{item.id}:reserve",
                         business_type="ORDER",
                         business_id=order.id,
                         business_item_id=item.id,
                     )
         except IntegrityError as exc:
+            # 4. 【兜底防线】处理并发请求导致数据库唯一约束冲突
+            # 假设两个请求几乎同时冲进来，前置的幂等查询都没查到，同时往下走
+            # 数据库唯一索引会拦住其中一个，报 IntegrityError。
             # ④ 并发重放可能同时撞唯一约束, 回滚后按幂等键重新读取.
             await self.session.rollback()
             if not self._is_idempotency_conflict(exc):

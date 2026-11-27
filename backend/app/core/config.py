@@ -131,9 +131,8 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
     jwt_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
-    # 交易业务时间窗口. 订单过期时间仅作为历史字段保留, 售后窗口继续使用.
+    # 交易业务时间窗口. 售后窗口继续使用.
     # Orders / after-sales
-    order_payment_timeout_minutes: int = Field(default=30, ge=1, le=1440)
     after_sales_window_hours: int = Field(default=168, ge=1, le=720)
 
     # RAG 配置. Qdrant 只保存向量索引, 文档/版本/Chunk 的权威数据仍在 MySQL.
