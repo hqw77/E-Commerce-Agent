@@ -19,6 +19,7 @@
 11 初级全栈面试速成执行手册
 12 订单库存代码阅读路线
 13 订单库存四条主链路面试总结
+14 JWT 与 RBAC 代码阅读与面试总结
 ```
 
 ## 文档索引
@@ -36,6 +37,7 @@
 - [11 初级全栈面试速成执行手册](11-interview-crash-plan.md)
 - [12 订单库存代码阅读路线](12-order-inventory-reading-guide.md)
 - [13 订单库存四条主链路面试总结](13-order-inventory-four-flows.md)
+- [14 JWT 与 RBAC 代码阅读与面试总结](14-jwt-rbac-reading-guide.md)
 
 ## 项目一句话
 
